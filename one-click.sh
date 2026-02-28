@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Clear any stale shell env vars that conflict with .env
+unset OPENAI_API_KEY OPENAI_BASE_URL MODEL_NAME AGENT_SETTING_CONFIG 2>/dev/null || true
+
 SPEC=${1:-"specs/example-spec.yaml"}
 MAX_ITERS=${MAX_ITERATIONS:-50}
 WORKSPACE=$(pwd)
