@@ -1,0 +1,31 @@
+mcp_servers:
+
+  # IBM
+  qradar:
+    url: http://qradar-mcp:8000
+    description: IBM QRadar SIEM - security audits, offense queries, AQL
+
+  code-engine:
+    url: http://code-engine-mcp:8000
+    description: IBM Code Engine - deploy, preview, manage apps
+
+  # Coding
+  github:
+    url: http://github-mcp:8000
+    description: GitHub - repos, PRs, issues, branches, commits
+
+  context7:
+    url: http://context7-mcp:8000
+    description: Context7 - accurate library docs, anti-hallucination
+
+  docker:
+    url: http://docker-mcp:8000
+    description: Docker - build, run, manage containers
+
+  playwright:
+    url: http://playwright-mcp:8000
+    description: Playwright - browser automation, UI testing
+
+  filesystem:
+    url: http://filesystem-mcp:8000
+    description: Filesystem - read, write, search files in workspace

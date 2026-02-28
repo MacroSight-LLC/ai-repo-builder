@@ -1,0 +1,35 @@
+name: example-fastapi-service
+description: A production-ready FastAPI microservice with authentication, database, and tests
+
+stack:
+  language: python
+  framework: fastapi
+  database: postgresql
+  testing: pytest
+  containerization: docker
+
+features:
+  - REST API with CRUD endpoints
+  - JWT authentication
+  - SQLAlchemy ORM models
+  - Alembic migrations
+  - Pytest test suite (>80% coverage)
+  - Dockerfile + docker-compose
+  - OpenAPI docs auto-generated
+
+structure:
+  - src/main.py
+  - src/models/
+  - src/routers/
+  - src/auth/
+  - src/database.py
+  - tests/
+  - Dockerfile
+  - docker-compose.yml
+  - README.md
+
+quality_gates:
+  - all tests pass
+  - no critical security vulnerabilities
+  - coverage > 80%
+  - linting clean

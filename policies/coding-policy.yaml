@@ -1,0 +1,30 @@
+reasoning_mode: deep
+max_tokens_per_step: 8192
+temperature: 0.1
+
+priorities:
+  - correctness
+  - security
+  - test_coverage
+  - readability
+
+rules:
+  - Always write tests before implementation (TDD)
+  - Never hardcode secrets or API keys
+  - Use type hints on all Python functions
+  - Follow PEP8 and Black formatting
+  - Add docstrings to all public functions
+  - Use async/await for all I/O operations
+  - Check QRadar after every deploy step
+
+tool_preference:
+  - Use context7 for all library documentation lookups
+  - Use filesystem for reading/writing code files
+  - Use github for all git operations
+  - Use docker for build verification
+  - Use qradar for security validation
+
+retry_strategy:
+  on_test_failure: rewrite failing module
+  on_security_issue: patch immediately before continuing
+  on_hallucination: re-query context7 for correct API

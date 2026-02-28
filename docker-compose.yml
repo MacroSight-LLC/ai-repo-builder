@@ -1,0 +1,145 @@
+version: '3.8'
+
+services:
+
+  # ============================================================
+  # CUGA AGENT (core)
+  # ============================================================
+  cuga:
+    build: .
+    container_name: cuga
+    ports:
+      - "7860:7860"
+    env_file: .env
+    volumes:
+      - .:/workspace
+      - ./mcp_servers.yaml:/app/mcp_servers.yaml
+    depends_on:
+      - github-mcp
+      - context7-mcp
+      - docker-mcp
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
+  # ============================================================
+  # IBM MCPs
+  # ============================================================
+  qradar-mcp:
+    image: ghcr.io/ibm/qradar-mcp-server:latest
+    container_name: qradar-mcp
+    ports:
+      - "8001:8000"
+    environment:
+      - QRADAR_HOST=${QRADAR_HOST}
+      - QRADAR_API_TOKEN=${QRADAR_API_TOKEN}
+      - QRADAR_PORT=${QRADAR_PORT}
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
+  code-engine-mcp:
+    image: ghcr.io/greyhoundforty/code-engine-mcp:latest
+    container_name: code-engine-mcp
+    ports:
+      - "8002:8000"
+    environment:
+      - IBMCLOUD_API_KEY=${IBMCLOUD_API_KEY}
+      - CODE_ENGINE_PROJECT=${CODE_ENGINE_PROJECT}
+      - CODE_ENGINE_REGION=${CODE_ENGINE_REGION}
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
+  # ============================================================
+  # CODING MCPs
+  # ============================================================
+  github-mcp:
+    image: ghcr.io/github/github-mcp-server:latest
+    container_name: github-mcp
+    ports:
+      - "8003:8000"
+    environment:
+      - GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_TOKEN}
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
+  context7-mcp:
+    image: ghcr.io/upstash/context7-mcp:latest
+    container_name: context7-mcp
+    ports:
+      - "8004:8000"
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
+  docker-mcp:
+    image: ghcr.io/docker/mcp-server:latest
+    container_name: docker-mcp
+    ports:
+      - "8005:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
+  playwright-mcp:
+    image: ghcr.io/microsoft/playwright-mcp:latest
+    container_name: playwright-mcp
+    ports:
+      - "8006:8000"
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
+  filesystem-mcp:
+    image: ghcr.io/modelcontextprotocol/filesystem-mcp:latest
+    container_name: filesystem-mcp
+    ports:
+      - "8007:8000"
+    volumes:
+      - .:/workspace
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
+  # ============================================================
+  # OBSERVABILITY
+  # ============================================================
+  langfuse:
+    image: ghcr.io/langfuse/langfuse:latest
+    container_name: langfuse
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      - NEXTAUTH_SECRET=your-secret-here
+      - NEXTAUTH_URL=http://localhost:3000
+      - SALT=your-salt-here
+    depends_on:
+      - langfuse-db
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
+  langfuse-db:
+    image: postgres:15
+    container_name: langfuse-db
+    environment:
+      - POSTGRES_USER=langfuse
+      - POSTGRES_PASSWORD=langfuse
+      - POSTGRES_DB=langfuse
+    volumes:
+      - langfuse-db-data:/var/lib/postgresql/data
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
+networks:
+  mcp-net:
+    driver: bridge
+
+volumes:
+  langfuse-db-data:
