@@ -1,7 +1,4 @@
-version: '3.8'
-
 services:
-
   # ============================================================
   # CUGA AGENT (core)
   # ============================================================
@@ -11,6 +8,10 @@ services:
     ports:
       - "7860:7860"
     env_file: .env
+    environment:
+      - MCP_SERVERS_FILE=/app/mcp_servers.yaml
+      - SETTINGS_TOML_PATH=/app/src/cuga/settings.toml
+      - PYTHONPATH=/app/src
     volumes:
       - .:/workspace
       - ./mcp_servers.yaml:/app/mcp_servers.yaml
@@ -25,18 +26,21 @@ services:
   # ============================================================
   # IBM MCPs
   # ============================================================
-  qradar-mcp:
-    image: ghcr.io/ibm/qradar-mcp-server:latest
-    container_name: qradar-mcp
-    ports:
-      - "8001:8000"
-    environment:
-      - QRADAR_HOST=${QRADAR_HOST}
-      - QRADAR_API_TOKEN=${QRADAR_API_TOKEN}
-      - QRADAR_PORT=${QRADAR_PORT}
-    networks:
-      - mcp-net
-    restart: unless-stopped
+
+  # QRadar MCP — disabled (overkill for repo builder; use GitHub code scanning)
+  # Uncomment + add Wazuh later if MacroSight needs a real SIEM.
+  # qradar-mcp:
+  #   image: ghcr.io/ibm/qradar-mcp-server:latest
+  #   container_name: qradar-mcp
+  #   ports:
+  #     - "8001:8000"
+  #   environment:
+  #     - QRADAR_HOST=${QRADAR_HOST}
+  #     - QRADAR_API_TOKEN=${QRADAR_API_TOKEN}
+  #     - QRADAR_PORT=${QRADAR_PORT}
+  #   networks:
+  #     - mcp-net
+  #   restart: unless-stopped
 
   code-engine-mcp:
     image: ghcr.io/greyhoundforty/code-engine-mcp:latest
@@ -54,53 +58,88 @@ services:
   # ============================================================
   # CODING MCPs
   # ============================================================
+
+  # GitHub MCP — has native HTTP mode
   github-mcp:
-    image: ghcr.io/github/github-mcp-server:latest
+    image: ghcr.io/github/github-mcp-server
     container_name: github-mcp
     ports:
       - "8003:8000"
+    command: ["http", "--port", "8000"]
     environment:
       - GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_TOKEN}
     networks:
       - mcp-net
     restart: unless-stopped
 
+  # Context7 MCP — stdio image, wrapped with supergateway → SSE
   context7-mcp:
-    image: ghcr.io/upstash/context7-mcp:latest
+    image: supercorp/supergateway
     container_name: context7-mcp
     ports:
       - "8004:8000"
+    command:
+      - --stdio
+      - "npx -y @upstash/context7-mcp@latest"
+      - --port
+      - "8000"
+      - --healthEndpoint
+      - /healthz
     networks:
       - mcp-net
     restart: unless-stopped
 
+  # Docker MCP — stdio image, wrapped with supergateway → SSE
   docker-mcp:
-    image: ghcr.io/docker/mcp-server:latest
+    image: supercorp/supergateway
     container_name: docker-mcp
     ports:
       - "8005:8000"
+    command:
+      - --stdio
+      - "npx -y @modelcontextprotocol/server-docker"
+      - --port
+      - "8000"
+      - --healthEndpoint
+      - /healthz
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - mcp-net
     restart: unless-stopped
 
+  # Playwright MCP — stdio image, wrapped with supergateway → SSE
   playwright-mcp:
-    image: ghcr.io/microsoft/playwright-mcp:latest
+    image: supercorp/supergateway
     container_name: playwright-mcp
     ports:
       - "8006:8000"
+    command:
+      - --stdio
+      - "npx -y @playwright/mcp@latest"
+      - --port
+      - "8000"
+      - --healthEndpoint
+      - /healthz
     networks:
       - mcp-net
     restart: unless-stopped
 
+  # Filesystem MCP — stdio image, wrapped with supergateway → SSE
   filesystem-mcp:
-    image: ghcr.io/modelcontextprotocol/filesystem-mcp:latest
+    image: supercorp/supergateway
     container_name: filesystem-mcp
     ports:
       - "8007:8000"
+    command:
+      - --stdio
+      - "npx -y @modelcontextprotocol/server-filesystem /projects/workspace"
+      - --port
+      - "8000"
+      - --healthEndpoint
+      - /healthz
     volumes:
-      - .:/workspace
+      - .:/projects/workspace
     networks:
       - mcp-net
     restart: unless-stopped

@@ -6,7 +6,11 @@
       "type": "python",
       "request": "launch",
       "module": "uvicorn",
-      "args": ["cuga.backend.tools_env.registry.registry.api_registry_server:app", "--port", "8001"],
+      "args": [
+        "cuga.backend.tools_env.registry.registry.api_registry_server:app",
+        "--port",
+        "8001"
+      ],
       "cwd": "${workspaceFolder}/src",
       "env": {
         "PYTHONUNBUFFERED": "1",
@@ -20,7 +24,11 @@
       "type": "python",
       "request": "launch",
       "module": "uvicorn",
-      "args": ["cuga.backend.tools_env.registry.registry.api_registry_server:app", "--port", "8001"],
+      "args": [
+        "cuga.backend.tools_env.registry.registry.api_registry_server:app",
+        "--port",
+        "8001"
+      ],
       "cwd": "${workspaceFolder}",
       "env": {
         "PYTHONUNBUFFERED": "1",
@@ -76,11 +84,98 @@
       "request": "launch",
       "module": "fastapi",
       "envFile": "${workspaceFolder}/.env",
-      "args": ["dev", "src/cuga/backend/server/main.py", "--no-reload", "--port=7860"],
+      "args": [
+        "dev",
+        "src/cuga/backend/server/main.py",
+        "--no-reload",
+        "--port=7860"
+      ],
       "cwd": "${workspaceFolder}",
       "env": {
         "PYTHONUNBUFFERED": "1"
       },
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "stopOnEntry": false,
+      "justMyCode": false,
+      "redirectOutput": true,
+      "showReturnValue": true,
+      "subProcess": true
+    },
+    {
+      "name": "AI Repo Builder — CUGA Agent",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "cuga.cli.main",
+      "args": [
+        "--spec",
+        "${workspaceFolder}/specs/example-spec.yaml",
+        "--tools",
+        "${workspaceFolder}/mcp_servers.yaml",
+        "--policy",
+        "${workspaceFolder}/policies/coding-policy.yaml",
+        "--output",
+        "${workspaceFolder}/output"
+      ],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+        "PYTHONUNBUFFERED": "1",
+        "LOGURU_LEVEL": "DEBUG",
+        "MCP_SERVERS_FILE": "${workspaceFolder}/mcp_servers.yaml",
+        "SETTINGS_TOML_PATH": "${workspaceFolder}/src/cuga/settings.toml"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "stopOnEntry": false,
+      "justMyCode": false,
+      "redirectOutput": true,
+      "showReturnValue": true,
+      "subProcess": true
+    },
+    {
+      "name": "AI Repo Builder — Validate",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "tests/",
+        "-q",
+        "--tb=short"
+      ],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+        "PYTHONUNBUFFERED": "1"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "justMyCode": false
+    },
+    {
+      "name": "AI Repo Builder — CUGA Server",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "cuga.backend.server.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "7860",
+        "--reload"
+      ],
+      "cwd": "${workspaceFolder}/src",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+        "PYTHONUNBUFFERED": "1",
+        "LOGURU_LEVEL": "DEBUG",
+        "MCP_SERVERS_FILE": "${workspaceFolder}/mcp_servers.yaml",
+        "SETTINGS_TOML_PATH": "${workspaceFolder}/src/cuga/settings.toml"
+      },
+      "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal",
       "python": "${workspaceFolder}/.venv/bin/python",
       "stopOnEntry": false,

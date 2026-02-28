@@ -3,16 +3,59 @@ set -e
 
 SPEC=${1:-"specs/example-spec.yaml"}
 MAX_ITERS=${MAX_ITERATIONS:-50}
-WORKSPACE=${WORKSPACE:-$(pwd)}
+WORKSPACE=$(pwd)
 PASS=false
 
 echo "🚀 Starting ai-repo-builder"
 echo "📋 Spec: $SPEC"
 echo "🔁 Max iterations: $MAX_ITERS"
 
-# Start all MCP containers
-docker compose up -d --wait
-echo "✅ All MCP containers running"
+# Start MCP containers (only the ones with valid images)
+MCP_SERVICES="context7-mcp filesystem-mcp github-mcp docker-mcp langfuse-db"
+echo "🐳 Starting MCP services: $MCP_SERVICES"
+docker compose up -d $MCP_SERVICES
+echo "✅ MCP containers started"
+
+# Wait for health endpoints
+echo "⏳ Waiting for MCP servers to be ready..."
+for endpoint in "http://localhost:8004/healthz" "http://localhost:8007/healthz"; do
+  for attempt in $(seq 1 30); do
+    if curl -sf "$endpoint" > /dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+done
+echo "✅ MCP servers ready"
+
+# Use localhost URLs for local execution (containers expose ports to host)
+export MCP_SERVERS_FILE="$WORKSPACE/mcp_servers_local.yaml"
+export SETTINGS_TOML_PATH="$WORKSPACE/src/cuga/settings.toml"
+export PYTHONPATH="$WORKSPACE/src"
+
+# Generate local MCP config pointing to localhost instead of container names
+cat > "$WORKSPACE/mcp_servers_local.yaml" << 'EOF'
+mcpServers:
+  github:
+    url: http://localhost:8003
+    transport: http
+    description: GitHub - repos, PRs, issues, branches, commits
+
+  context7:
+    url: http://localhost:8004/sse
+    transport: sse
+    description: Context7 - accurate library docs, anti-hallucination
+
+  docker:
+    url: http://localhost:8005/sse
+    transport: sse
+    description: Docker - build, run, manage containers
+
+  filesystem:
+    url: http://localhost:8007/sse
+    transport: sse
+    description: Filesystem - read, write, search files in workspace
+EOF
 
 for i in $(seq 1 $MAX_ITERS); do
   echo ""
@@ -20,10 +63,10 @@ for i in $(seq 1 $MAX_ITERS); do
   echo "🔄 Iteration $i / $MAX_ITERS"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  # Run CUGA agent
-  docker exec cuga python -m cuga.main \
+  # Run CUGA agent locally
+  python -m cuga.main \
     --spec "$SPEC" \
-    --tools mcp_servers.yaml \
+    --tools "$MCP_SERVERS_FILE" \
     --policy policies/coding-policy.yaml \
     --output "$WORKSPACE/output" || true
 
@@ -41,6 +84,9 @@ for i in $(seq 1 $MAX_ITERS); do
     echo "⚠️  Validation failed — retrying..."
   fi
 done
+
+# Cleanup temp config
+rm -f "$WORKSPACE/mcp_servers_local.yaml"
 
 if [ "$PASS" = true ]; then
   echo ""

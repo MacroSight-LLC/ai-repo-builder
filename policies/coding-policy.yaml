@@ -15,14 +15,13 @@ rules:
   - Follow PEP8 and Black formatting
   - Add docstrings to all public functions
   - Use async/await for all I/O operations
-  - Check QRadar after every deploy step
+  - Run GitHub code scanning / dependency review after every deploy step
 
 tool_preference:
   - Use context7 for all library documentation lookups
   - Use filesystem for reading/writing code files
-  - Use github for all git operations
+  - Use github for all git operations (including security scanning)
   - Use docker for build verification
-  - Use qradar for security validation
 
 retry_strategy:
   on_test_failure: rewrite failing module
