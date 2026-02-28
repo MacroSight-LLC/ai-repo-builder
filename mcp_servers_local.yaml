@@ -9,11 +9,6 @@ mcpServers:
     transport: sse
     description: Context7 - accurate library docs, anti-hallucination
 
-  docker:
-    url: http://localhost:8005/sse
-    transport: sse
-    description: Docker - build, run, manage containers
-
   filesystem:
     url: http://localhost:8007/sse
     transport: sse

@@ -11,7 +11,7 @@ echo "📋 Spec: $SPEC"
 echo "🔁 Max iterations: $MAX_ITERS"
 
 # Start MCP containers (only the ones with valid images)
-MCP_SERVICES="context7-mcp filesystem-mcp github-mcp docker-mcp langfuse-db"
+MCP_SERVICES="context7-mcp filesystem-mcp github-mcp langfuse-db"
 echo "🐳 Starting MCP services: $MCP_SERVICES"
 docker compose up -d $MCP_SERVICES
 echo "✅ MCP containers started"
@@ -45,11 +45,6 @@ mcpServers:
     url: http://localhost:8004/sse
     transport: sse
     description: Context7 - accurate library docs, anti-hallucination
-
-  docker:
-    url: http://localhost:8005/sse
-    transport: sse
-    description: Docker - build, run, manage containers
 
   filesystem:
     url: http://localhost:8007/sse
