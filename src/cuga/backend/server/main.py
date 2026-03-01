@@ -1192,6 +1192,66 @@ async def health():
     return JSONResponse({"status": "ok"})
 
 
+# ── Build validation & catalog endpoints ───────────────────────
+
+
+@app.post("/api/validate-build")
+async def validate_build(
+    request: Request,
+    current_user: Optional[UserInfo] = Depends(require_auth),
+):
+    """Run post-build validation on a project directory.
+
+    Body JSON: {"project_dir": "/path/to/project", "spec": {...}}
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    project_dir_str = body.get("project_dir", "")
+    spec = body.get("spec")
+
+    if not project_dir_str:
+        return JSONResponse({"error": "project_dir is required"}, status_code=400)
+
+    from pathlib import Path
+
+    from cuga.post_build import validate_project
+
+    project_dir = Path(project_dir_str)
+    if not project_dir.exists():
+        return JSONResponse(
+            {"error": f"Directory not found: {project_dir}"}, status_code=404
+        )
+
+    report = validate_project(project_dir, spec)
+    return JSONResponse(report)
+
+
+@app.get("/api/build-stats")
+async def build_stats(
+    current_user: Optional[UserInfo] = Depends(require_auth),
+):
+    """Get aggregate build statistics from the catalog."""
+    from cuga.build_catalog import get_build_stats
+
+    stats = get_build_stats()
+    return JSONResponse(stats)
+
+
+@app.get("/api/build-history")
+async def build_history(
+    current_user: Optional[UserInfo] = Depends(require_auth),
+):
+    """Get recent build history records."""
+    from cuga.build_catalog import load_history
+
+    records = load_history()
+    # Return last 50 records (most recent first)
+    return JSONResponse(list(reversed(records[-50:])))
+
+
 @app.get("/api/auth/config")
 async def auth_config():
     return JSONResponse({"enabled": _auth_enabled()})

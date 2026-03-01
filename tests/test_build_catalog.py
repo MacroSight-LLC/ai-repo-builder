@@ -13,6 +13,8 @@ from cuga.build_catalog import (
     get_lessons_for_prompt,
     load_history,
     load_optimizations,
+    mine_lessons,
+    prune_stale_lessons,
     record_build,
 )
 
@@ -399,3 +401,331 @@ class TestSmellClassification:
         record_build(SAMPLE_SPEC, SAMPLE_VALIDATION_PASS, -5.0, catalog_dir=catalog_dir)
         history = load_history(catalog_dir)
         assert history[0]["elapsed_seconds"] == 0.0
+
+
+# ── mine_lessons ───────────────────────────────────────────────
+
+
+class TestMineLessons:
+    """Tests for auto-mining lessons from build history."""
+
+    def test_no_history_returns_empty(self, catalog_dir: Path) -> None:
+        """No build history should produce no new lessons."""
+        assert mine_lessons(catalog_dir=catalog_dir) == []
+
+    def test_below_threshold_no_lessons(self, catalog_dir: Path) -> None:
+        """Patterns with < min_occurrences should not be promoted."""
+        # Record 2 builds with bare_except (threshold is 3 by default)
+        validation = {
+            **SAMPLE_VALIDATION_PASS,
+            "passed": False,
+            "smells": [
+                {
+                    "file": "a.py",
+                    "line": 1,
+                    "severity": "warn",
+                    "issue": "Bare except — catches everything",
+                    "code": "except:",
+                },
+            ],
+        }
+        record_build(SAMPLE_SPEC, validation, 10.0, catalog_dir=catalog_dir)
+        record_build(SAMPLE_SPEC, validation, 10.0, catalog_dir=catalog_dir)
+
+        new = mine_lessons(min_occurrences=3, catalog_dir=catalog_dir)
+        assert new == []
+
+    def test_at_threshold_creates_lesson(self, catalog_dir: Path) -> None:
+        """Patterns reaching min_occurrences should be promoted."""
+        validation = {
+            **SAMPLE_VALIDATION_PASS,
+            "passed": False,
+            "smells": [
+                {
+                    "file": "a.py",
+                    "line": 1,
+                    "severity": "warn",
+                    "issue": "Bare except — catches everything",
+                    "code": "except:",
+                },
+            ],
+        }
+        for _ in range(3):
+            record_build(SAMPLE_SPEC, validation, 10.0, catalog_dir=catalog_dir)
+
+        new = mine_lessons(min_occurrences=3, catalog_dir=catalog_dir)
+        assert len(new) == 1
+        assert new[0]["pattern"] == "bare_except"
+        assert "specific exception" in new[0]["lesson"].lower()
+
+    def test_persists_to_yaml(self, catalog_dir: Path) -> None:
+        """New lessons should be written to optimizations.yaml."""
+        validation = {
+            **SAMPLE_VALIDATION_PASS,
+            "passed": False,
+            "smells": [
+                {
+                    "file": "s.py",
+                    "line": 1,
+                    "severity": "error",
+                    "issue": "Empty pass statement — stub function",
+                    "code": "pass",
+                },
+            ],
+        }
+        for _ in range(4):
+            record_build(SAMPLE_SPEC, validation, 10.0, catalog_dir=catalog_dir)
+
+        mine_lessons(min_occurrences=2, catalog_dir=catalog_dir)
+
+        opts = load_optimizations(catalog_dir)
+        assert "stub_function" in opts["by_pattern"]
+        assert opts["by_pattern"]["stub_function"]["source"] == "auto"
+
+    def test_does_not_duplicate_existing(self, catalog_with_opts: Path) -> None:
+        """If a pattern already has a lesson, mine_lessons should skip it."""
+        # catalog_with_opts has bare_except, stub_function, hardcoded_secret
+        validation = {
+            **SAMPLE_VALIDATION_PASS,
+            "passed": False,
+            "smells": [
+                {
+                    "file": "a.py",
+                    "line": 1,
+                    "severity": "warn",
+                    "issue": "Bare except — catches everything",
+                    "code": "except:",
+                },
+                {
+                    "file": "b.py",
+                    "line": 5,
+                    "severity": "error",
+                    "issue": "Empty pass statement — stub function",
+                    "code": "pass",
+                },
+            ],
+        }
+        for _ in range(5):
+            record_build(
+                SAMPLE_SPEC, validation, 10.0, catalog_dir=catalog_with_opts
+            )
+
+        new = mine_lessons(min_occurrences=3, catalog_dir=catalog_with_opts)
+        # All patterns already exist in catalog_with_opts — nothing to add
+        assert new == []
+
+    def test_idempotent_on_second_call(self, catalog_dir: Path) -> None:
+        """Running mine_lessons twice should not produce duplicates."""
+        validation = {
+            **SAMPLE_VALIDATION_PASS,
+            "passed": False,
+            "smells": [
+                {
+                    "file": "a.py",
+                    "line": 1,
+                    "severity": "warn",
+                    "issue": "Bare except — catches everything",
+                    "code": "except:",
+                },
+            ],
+        }
+        for _ in range(5):
+            record_build(SAMPLE_SPEC, validation, 10.0, catalog_dir=catalog_dir)
+
+        first = mine_lessons(min_occurrences=3, catalog_dir=catalog_dir)
+        second = mine_lessons(min_occurrences=3, catalog_dir=catalog_dir)
+        assert len(first) == 1
+        assert len(second) == 0  # Already exists
+
+    def test_multiple_patterns_mined(self, catalog_dir: Path) -> None:
+        """Multiple patterns can be mined in a single call."""
+        validation = {
+            **SAMPLE_VALIDATION_PASS,
+            "passed": False,
+            "smells": [
+                {
+                    "file": "a.py",
+                    "line": 1,
+                    "severity": "warn",
+                    "issue": "Bare except — catches everything",
+                    "code": "except:",
+                },
+                {
+                    "file": "b.py",
+                    "line": 5,
+                    "severity": "error",
+                    "issue": "Hardcoded secret/key",
+                    "code": "api_key = 'abc'",
+                },
+                {
+                    "file": "c.py",
+                    "line": 10,
+                    "severity": "error",
+                    "issue": "Empty pass statement — stub function",
+                    "code": "pass",
+                },
+            ],
+        }
+        for _ in range(3):
+            record_build(SAMPLE_SPEC, validation, 10.0, catalog_dir=catalog_dir)
+
+        new = mine_lessons(min_occurrences=3, catalog_dir=catalog_dir)
+        pattern_names = {lesson["pattern"] for lesson in new}
+        assert "bare_except" in pattern_names
+        assert "hardcoded_secret" in pattern_names
+        assert "stub_function" in pattern_names
+
+    def test_unknown_pattern_ignored(self, catalog_dir: Path) -> None:
+        """Patterns not in _MINEABLE_PATTERNS should be skipped."""
+        # Write history manually with an unknown pattern
+        history_file = catalog_dir / "build_history.jsonl"
+        for _ in range(5):
+            line = json.dumps({
+                "project_name": "test",
+                "stack": "python/fastapi",
+                "passed": False,
+                "smell_counts": {"unknown_weird_pattern": 10},
+                "timestamp": "2025-01-01T00:00:00Z",
+            })
+            with history_file.open("a") as f:
+                f.write(line + "\n")
+
+        new = mine_lessons(min_occurrences=3, catalog_dir=catalog_dir)
+        assert new == []
+
+
+# ── prune_stale_lessons ────────────────────────────────────────
+
+
+class TestPruneStaleLessons:
+    """Tests for pruning stale auto-generated lessons."""
+
+    def test_no_pruning_below_min_builds(self, catalog_with_opts: Path) -> None:
+        """Should not prune if fewer than min_builds exist."""
+        # Record just 1 build (min_builds=10 default)
+        record_build(
+            SAMPLE_SPEC, SAMPLE_VALIDATION_PASS, 10.0, catalog_dir=catalog_with_opts
+        )
+        pruned = prune_stale_lessons(catalog_dir=catalog_with_opts)
+        assert pruned == []
+
+    def test_does_not_prune_human_lessons(self, catalog_with_opts: Path) -> None:
+        """Human-authored lessons (source != 'auto') should never be pruned."""
+        # Add enough builds to enable pruning
+        for _ in range(15):
+            record_build(
+                SAMPLE_SPEC,
+                SAMPLE_VALIDATION_PASS,
+                10.0,
+                catalog_dir=catalog_with_opts,
+            )
+
+        prune_stale_lessons(
+            max_age_days=0,  # Aggressive: anything not seen "today"
+            min_builds=10,
+            catalog_dir=catalog_with_opts,
+        )
+        # Human lessons should never be pruned
+        opts = load_optimizations(catalog_with_opts)
+        assert len(opts["global"]) == 2
+        assert "python/fastapi" in opts.get("by_stack", {})
+
+    def test_prunes_auto_lesson_not_seen_recently(
+        self, catalog_dir: Path
+    ) -> None:
+        """Auto lessons with no recent occurrences should be pruned."""
+        # Create an optimizations file with an auto lesson
+        opts = {
+            "global": [],
+            "by_stack": {},
+            "by_pattern": {
+                "bare_except": {
+                    "lesson": "Catch specific exceptions",
+                    "severity": "important",
+                    "auto_count": 5,
+                    "source": "auto",
+                },
+            },
+        }
+        (catalog_dir / "optimizations.yaml").write_text(
+            yaml.dump(opts, default_flow_style=False)
+        )
+
+        # Record builds that DON'T have this pattern (old pattern)
+        for _ in range(12):
+            record_build(
+                SAMPLE_SPEC,
+                SAMPLE_VALIDATION_PASS,
+                10.0,
+                catalog_dir=catalog_dir,
+            )
+
+        pruned = prune_stale_lessons(
+            max_age_days=0,
+            min_builds=10,
+            catalog_dir=catalog_dir,
+        )
+        assert "bare_except" in pruned
+
+        # Verify it's removed from YAML
+        opts = load_optimizations(catalog_dir)
+        assert "bare_except" not in opts["by_pattern"]
+
+    def test_keeps_recently_seen_auto_lesson(self, catalog_dir: Path) -> None:
+        """Auto lessons still seen in recent builds should be kept."""
+        opts = {
+            "global": [],
+            "by_stack": {},
+            "by_pattern": {
+                "bare_except": {
+                    "lesson": "Catch specific exceptions",
+                    "severity": "important",
+                    "auto_count": 5,
+                    "source": "auto",
+                },
+            },
+        }
+        (catalog_dir / "optimizations.yaml").write_text(
+            yaml.dump(opts, default_flow_style=False)
+        )
+
+        # Record builds that DO include this pattern
+        validation = {
+            **SAMPLE_VALIDATION_PASS,
+            "passed": False,
+            "smells": [
+                {
+                    "file": "a.py",
+                    "line": 1,
+                    "severity": "warn",
+                    "issue": "Bare except — catches everything",
+                    "code": "except:",
+                },
+            ],
+        }
+        for _ in range(12):
+            record_build(SAMPLE_SPEC, validation, 10.0, catalog_dir=catalog_dir)
+
+        pruned = prune_stale_lessons(
+            max_age_days=30,
+            min_builds=10,
+            catalog_dir=catalog_dir,
+        )
+        assert pruned == []
+
+        # Verify it's still present
+        opts = load_optimizations(catalog_dir)
+        assert "bare_except" in opts["by_pattern"]
+
+    def test_empty_pattern_section_no_crash(self, catalog_dir: Path) -> None:
+        """Should not crash when by_pattern is empty."""
+        opts = {"global": [], "by_stack": {}, "by_pattern": {}}
+        (catalog_dir / "optimizations.yaml").write_text(
+            yaml.dump(opts, default_flow_style=False)
+        )
+        for _ in range(12):
+            record_build(
+                SAMPLE_SPEC, SAMPLE_VALIDATION_PASS, 10.0, catalog_dir=catalog_dir
+            )
+        pruned = prune_stale_lessons(min_builds=10, catalog_dir=catalog_dir)
+        assert pruned == []

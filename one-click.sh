@@ -1,6 +1,18 @@
 #!/bin/bash
 set -e
 
+# ──────────────────────────────────────────────────────────────────
+# one-click.sh — Thin wrapper around the Python build loop.
+#
+# Usage:
+#   ./one-click.sh                       # Uses specs/example-spec.yaml
+#   ./one-click.sh specs/my-project.yaml
+#   MAX_ITERATIONS=10 ./one-click.sh specs/big-project.yaml
+#
+# The real work happens in `python -m cuga.build_loop` which runs an
+# in-process build→validate→feedback→retry loop (Smart Ralph).
+# ──────────────────────────────────────────────────────────────────
+
 # Clear any stale shell env vars that conflict with .env
 unset OPENAI_API_KEY OPENAI_BASE_URL MODEL_NAME AGENT_SETTING_CONFIG IBMCLOUD_API_KEY WATSONX_API_KEY WATSONX_APIKEY WATSONX_PROJECT_ID WATSONX_URL 2>/dev/null || true
 
@@ -28,18 +40,17 @@ else
 fi
 
 SPEC=${1:-"specs/example-spec.yaml"}
-MAX_ITERS=${MAX_ITERATIONS:-50}
+MAX_ITERS=${MAX_ITERATIONS:-5}
 WORKSPACE=$(pwd)
-PASS=false
 
-echo "🚀 Starting ai-repo-builder"
+echo "🚀 Starting ai-repo-builder (Smart Ralph loop)"
 echo "📋 Spec: $SPEC"
 echo "🔁 Max iterations: $MAX_ITERS"
 
 # Start MCP containers (only the ones with valid images)
 MCP_SERVICES="context7-mcp filesystem-mcp github-mcp langfuse-db"
 echo "🐳 Starting MCP services: $MCP_SERVICES"
-docker compose up -d $MCP_SERVICES
+docker compose up -d $MCP_SERVICES 2>/dev/null || echo "⚠️  Docker Compose not available — using local MCP servers"
 echo "✅ MCP containers started"
 
 # Wait for health endpoints
@@ -78,46 +89,45 @@ mcpServers:
     description: Filesystem - read, write, search files in workspace
 EOF
 
-for i in $(seq 1 $MAX_ITERS); do
-  echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "🔄 Iteration $i / $MAX_ITERS"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+# ── Run the Python build loop ──────────────────────────────────
+# This replaces the old bash for-loop that cold-restarted the agent.
+# The Python loop keeps the agent warm and feeds validation errors
+# back as context for self-correction.
 
-  # Run CUGA agent locally
-  python -m cuga.main \
-    --spec "$SPEC" \
-    --tools "$MCP_SERVERS_FILE" \
-    --policy policies/coding-policy.yaml \
-    --output "$WORKSPACE/output" || true
+LOOP_ARGS=(
+    --spec "$SPEC"
+    --tools "$MCP_SERVERS_FILE"
+    --policy "policies/coding-policy.yaml"
+    --output "$WORKSPACE/output"
+    --max-iterations "$MAX_ITERS"
+)
 
-  # Commit iteration
-  git add -A
-  git commit -m "iter($i): agent output" --allow-empty
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🔄 Running Smart Ralph build loop"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  # Validate
-  if bash scripts/validate.sh; then
-    echo ""
-    echo "✅ Validation passed on iteration $i"
-    PASS=true
-    break
-  else
-    echo "⚠️  Validation failed — retrying..."
-  fi
-done
+python -m cuga.build_loop "${LOOP_ARGS[@]}"
+BUILD_EXIT=$?
 
 # Cleanup temp config
 rm -f "$WORKSPACE/mcp_servers_local.yaml"
 
-if [ "$PASS" = true ]; then
-  echo ""
-  echo "🎉 Build complete! Opening PR..."
-  gh pr create \
-    --title "feat: AI-built repo (iter $i)" \
-    --body "Autonomously built by ai-repo-builder using CUGA + Ralph loop" \
-    --base main \
-    --head "$(git branch --show-current)"
+if [ "$BUILD_EXIT" -eq 0 ]; then
+    echo ""
+    echo "🎉 Build complete! Creating PR..."
+
+    # Commit and push
+    git add -A
+    git commit -m "feat: AI-built repo via Smart Ralph loop" --allow-empty
+
+    gh pr create \
+        --title "feat: AI-built repo (Smart Ralph)" \
+        --body "Autonomously built by ai-repo-builder using CUGA + Smart Ralph build loop" \
+        --base main \
+        --head "$(git branch --show-current)" 2>/dev/null || \
+        echo "ℹ️  Skipped PR creation (gh CLI not available or already on main)"
 else
-  echo "❌ Max iterations reached without passing validation"
-  exit 1
+    echo "❌ Build loop failed"
+    exit 1
 fi

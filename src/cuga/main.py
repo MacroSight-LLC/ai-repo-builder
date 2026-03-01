@@ -18,7 +18,6 @@ import json
 import os
 import sys
 import textwrap
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -147,7 +146,19 @@ def _spec_to_prompt(
     return prompt
 
 
-async def _run(args: argparse.Namespace) -> None:
+async def _run_setup(args: argparse.Namespace) -> tuple:
+    """Bootstrap MCP tools and CugaAgent from CLI args.
+
+    Shared by ``_run()`` and ``generate.build_project()``.
+
+    Args:
+        args: Parsed CLI arguments (needs ``tools``, ``output``).
+
+    Returns:
+        Tuple of ``(agent, workspace_root)`` where *agent* is a
+        ready-to-use ``CugaAgent`` and *workspace_root* is the
+        resolved output directory path string.
+    """
     mcp_servers_path = str(Path(args.tools).resolve())
     os.environ.setdefault("MCP_SERVERS_FILE", mcp_servers_path)
 
@@ -160,20 +171,9 @@ async def _run(args: argparse.Namespace) -> None:
     from cuga.mcp_direct_tools import create_tools_from_mcp_manager
     from cuga.sdk import CugaAgent
 
-    spec = _load_spec(args.spec)
-    policy_text = _load_policy(args.policy)
-
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
     workspace_root = str(output_dir.resolve())
-
-    prompt = _spec_to_prompt(spec, policy_text, workspace_root=workspace_root)
-
-    logger.info(f"Spec:   {args.spec}")
-    logger.info(f"Tools:  {args.tools}")
-    logger.info(f"Policy: {args.policy}")
-    logger.info(f"Output: {output_dir.resolve()}")
-    logger.info("Prompt length: {} chars", len(prompt))
 
     # ── Load MCP tools in-process from the YAML config ──────────────
     services = load_service_configs(mcp_servers_path)
@@ -184,7 +184,7 @@ async def _run(args: argparse.Namespace) -> None:
             env_key = svc.auth.value[4:]
             resolved = os.environ.get(env_key, "")
             if not resolved:
-                logger.warning(f"Auth env var {env_key} not set for {svc.name}")
+                logger.warning("Auth env var {} not set for {}", env_key, svc.name)
             svc.auth.value = resolved
 
     # Ensure the filesystem MCP is scoped to the resolved output directory
@@ -232,62 +232,89 @@ async def _run(args: argparse.Namespace) -> None:
     # Add native shell execution tool (replaces desktop-commander MCP)
     from cuga.shell_tool import create_shell_tool
 
-    os.environ["CUGA_OUTPUT_DIR"] = str(output_dir.resolve())
+    os.environ["CUGA_OUTPUT_DIR"] = workspace_root
     all_tools.append(create_shell_tool())
 
     logger.info(
-        f"Loaded {len(all_tools)} tools ({len(manager.tools_by_server)} MCP servers + shell)"
+        "Loaded {} tools ({} MCP servers + shell)",
+        len(all_tools),
+        len(manager.tools_by_server),
     )
     for t in all_tools:
-        logger.debug(f"  Tool: {t.name}")
+        logger.debug("  Tool: {}", t.name)
 
     # Build the agent with the loaded MCP tools
     agent = CugaAgent(tools=all_tools)
 
-    t0 = time.time()
-    result = await agent.invoke(prompt)
-    elapsed = time.time() - t0
+    return agent, workspace_root
+
+
+async def _run(args: argparse.Namespace) -> None:
+    spec = _load_spec(args.spec)
+    policy_text = _load_policy(args.policy)
+
+    logger.info("Spec:   {}", args.spec)
+    logger.info("Tools:  {}", args.tools)
+    logger.info("Policy: {}", args.policy)
+    logger.info("Output: {}", Path(args.output).resolve())
+
+    agent, workspace_root = await _run_setup(args)
+    output_dir = Path(args.output)
+
+    # ── Run the build loop (build→validate→feedback→retry) ─────
+    from cuga.build_loop import BuildLoop, BuildLoopConfig
+
+    project_name = spec.get("name", "project")
+    project_dir = output_dir / project_name
+
+    loop_config = BuildLoopConfig(
+        max_iterations=int(os.environ.get("CUGA_MAX_ITERATIONS", "5")),
+    )
+
+    build_loop = BuildLoop(
+        spec=spec,
+        agent=agent,
+        project_dir=project_dir,
+        config=loop_config,
+        policy_text=policy_text,
+        workspace_root=workspace_root,
+    )
+
+    build_result = await build_loop.run()
 
     # Persist results
     result_payload = {
         "spec": args.spec,
-        "answer": result.answer,
-        "tool_calls": [
-            tc.dict() if hasattr(tc, "dict") else str(tc) for tc in (result.tool_calls or [])
-        ],
-        "thread_id": result.thread_id,
-        "error": result.error,
+        "passed": build_result.passed,
+        "iterations": build_result.iteration,
+        "total_elapsed_seconds": round(build_result.total_elapsed, 1),
+        "files_total": build_result.final_validation.get("files_total", 0),
+        "lines_total": build_result.final_validation.get("lines_total", 0),
         "timestamp": datetime.now(UTC).isoformat(),
-        "elapsed_seconds": round(elapsed, 1),
     }
     result_file = output_dir / "result.json"
-    result_file.write_text(json.dumps(result_payload, indent=2, default=str))
-    logger.info(f"Result written to {result_file}")
+    result_file.write_text(
+        json.dumps(result_payload, indent=2, default=str),
+        encoding="utf-8",
+    )
+    logger.info("Result written to {}", result_file)
 
-    # ── Post-build file summary ────────────────────────────────
-    project_name = spec.get("name", "project")
-    project_dir = output_dir / project_name
-    if project_dir.exists():
-        # Run post-build validation and fixes
-        from cuga.post_build import post_build_validate
-
-        pb_summary = post_build_validate(project_dir, spec)
-        files_on_disk = pb_summary["file_count"]
-        total_bytes = pb_summary["total_bytes"]
-        logger.info("Built {} files ({:,} bytes) in {:.1f}s", files_on_disk, total_bytes, elapsed)
-
-        if pb_summary["syntax_errors"]:
-            logger.warning("{} Python syntax errors found", len(pb_summary["syntax_errors"]))
-        if pb_summary["missing_files"]:
-            logger.warning("{} expected files missing", len(pb_summary["missing_files"]))
+    if build_result.passed:
+        fv = build_result.final_validation
+        logger.info(
+            "✅ Build PASSED on iteration {} — {} files, {:,} lines in {:.1f}s",
+            build_result.iteration,
+            fv.get("files_total", 0),
+            fv.get("lines_total", 0),
+            build_result.total_elapsed,
+        )
     else:
-        logger.info("Agent completed in {:.1f}s", elapsed)
-
-    if result.error:
-        logger.error(f"Agent error: {result.error}")
+        logger.error(
+            "❌ Build FAILED after {} iteration(s) in {:.1f}s",
+            build_result.iteration,
+            build_result.total_elapsed,
+        )
         sys.exit(1)
-
-    logger.info("Agent completed successfully.")
 
 
 def main(argv: list[str] | None = None) -> None:

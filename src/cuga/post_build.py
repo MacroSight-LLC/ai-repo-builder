@@ -23,8 +23,12 @@ __all__ = [
     "fix_indentation",
     "post_build_validate",
     "run_ruff_check",
+    "validate_docker_build",
+    "validate_frontend",
+    "validate_migrations",
     "validate_project",
     "validate_python_syntax",
+    "validate_typescript",
 ]
 
 # ── Shared constants ──────────────────────────────────────────
@@ -255,6 +259,220 @@ def check_llm_smells(project_dir: Path) -> list[dict]:
     return issues
 
 
+# ── Frontend / TypeScript validation ──────────────────────────
+
+
+def validate_frontend(project_dir: Path) -> dict[str, object]:
+    """Validate a Node.js / frontend project if package.json exists.
+
+    Runs ``npm install`` (or ``pnpm install``) and ``npm run build``
+    if a ``build`` script is defined.
+
+    Returns:
+        Dict with keys ``has_frontend``, ``install_ok``, ``build_ok``,
+        ``install_output``, ``build_output``.
+    """
+    pkg_json = project_dir / "package.json"
+    if not pkg_json.exists():
+        # Check one level down (e.g. frontend/ subdirectory)
+        for child in project_dir.iterdir():
+            if child.is_dir() and (child / "package.json").exists():
+                pkg_json = child / "package.json"
+                break
+        else:
+            return {"has_frontend": False}
+
+    frontend_root = pkg_json.parent
+    result: dict[str, object] = {"has_frontend": True, "frontend_root": str(frontend_root)}
+
+    # Determine package manager
+    pm = "npm"
+    if (frontend_root / "pnpm-lock.yaml").exists():
+        pm = "pnpm"
+    elif (frontend_root / "yarn.lock").exists():
+        pm = "yarn"
+
+    # Install
+    try:
+        install_proc = subprocess.run(
+            [pm, "install", "--ignore-scripts"],
+            cwd=str(frontend_root),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        result["install_ok"] = install_proc.returncode == 0
+        result["install_output"] = (install_proc.stdout + install_proc.stderr).strip()[:2000]
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        result["install_ok"] = False
+        result["install_output"] = f"{pm} not available or timed out: {exc}"
+        return result
+
+    # Build (if script exists)
+    import json as _json
+
+    try:
+        pkg_data = _json.loads(pkg_json.read_text(encoding="utf-8"))
+        scripts = pkg_data.get("scripts", {})
+    except (ValueError, OSError):
+        scripts = {}
+
+    if "build" in scripts:
+        try:
+            build_proc = subprocess.run(
+                [pm, "run", "build"],
+                cwd=str(frontend_root),
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+            result["build_ok"] = build_proc.returncode == 0
+            result["build_output"] = (build_proc.stdout + build_proc.stderr).strip()[:2000]
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            result["build_ok"] = False
+            result["build_output"] = f"Build failed: {exc}"
+    else:
+        result["build_ok"] = None  # No build script defined
+        result["build_output"] = "No build script in package.json"
+
+    return result
+
+
+def validate_typescript(project_dir: Path) -> dict[str, object]:
+    """Run ``tsc --noEmit`` if a tsconfig.json exists.
+
+    Returns:
+        Dict with keys ``has_typescript``, ``tsc_ok``, ``tsc_output``.
+    """
+    tsconfig = project_dir / "tsconfig.json"
+    if not tsconfig.exists():
+        # Check one level down
+        for child in project_dir.iterdir():
+            if child.is_dir() and (child / "tsconfig.json").exists():
+                tsconfig = child / "tsconfig.json"
+                break
+        else:
+            return {"has_typescript": False}
+
+    ts_root = tsconfig.parent
+
+    try:
+        proc = subprocess.run(
+            ["npx", "tsc", "--noEmit"],
+            cwd=str(ts_root),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        return {
+            "has_typescript": True,
+            "tsc_ok": proc.returncode == 0,
+            "tsc_output": (proc.stdout + proc.stderr).strip()[:2000],
+        }
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return {
+            "has_typescript": True,
+            "tsc_ok": False,
+            "tsc_output": f"tsc check failed: {exc}",
+        }
+
+
+def validate_docker_build(project_dir: Path) -> dict[str, object]:
+    """Verify that ``docker build`` succeeds if a Dockerfile exists.
+
+    Returns:
+        Dict with keys ``has_dockerfile``, ``build_ok``, ``build_output``.
+    """
+    dockerfile = project_dir / "Dockerfile"
+    if not dockerfile.exists():
+        return {"has_dockerfile": False}
+
+    try:
+        proc = subprocess.run(
+            ["docker", "build", "--no-cache", "-q", "."],
+            cwd=str(project_dir),
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        return {
+            "has_dockerfile": True,
+            "build_ok": proc.returncode == 0,
+            "build_output": (proc.stdout + proc.stderr).strip()[:2000],
+        }
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return {
+            "has_dockerfile": True,
+            "build_ok": False,
+            "build_output": f"Docker build failed: {exc}",
+        }
+
+
+def validate_migrations(project_dir: Path) -> dict[str, object]:
+    """Check that database migration files exist if an ORM is detected.
+
+    Looks for SQLAlchemy/Alembic, Django, Prisma, or TypeORM patterns.
+
+    Returns:
+        Dict with keys ``has_orm``, ``orm_type``, ``has_migrations``,
+        ``migration_dir``.
+    """
+    result: dict[str, object] = {"has_orm": False}
+
+    # Alembic
+    alembic_ini = project_dir / "alembic.ini"
+    alembic_dir = project_dir / "alembic"
+    if alembic_ini.exists() or alembic_dir.exists():
+        result["has_orm"] = True
+        result["orm_type"] = "sqlalchemy/alembic"
+        versions_dir = alembic_dir / "versions" if alembic_dir.exists() else None
+        result["has_migrations"] = bool(
+            versions_dir and any(versions_dir.glob("*.py"))
+        )
+        result["migration_dir"] = str(alembic_dir) if alembic_dir.exists() else None
+        return result
+
+    # Django
+    manage_py = project_dir / "manage.py"
+    if manage_py.exists():
+        # Look for migrations/ dirs inside app directories
+        migration_dirs = list(project_dir.rglob("migrations/__init__.py"))
+        result["has_orm"] = True
+        result["orm_type"] = "django"
+        result["has_migrations"] = len(migration_dirs) > 0
+        result["migration_dir"] = (
+            str(migration_dirs[0].parent) if migration_dirs else None
+        )
+        return result
+
+    # Prisma
+    prisma_schema = project_dir / "prisma" / "schema.prisma"
+    if prisma_schema.exists():
+        migrations_dir = project_dir / "prisma" / "migrations"
+        result["has_orm"] = True
+        result["orm_type"] = "prisma"
+        result["has_migrations"] = migrations_dir.exists() and any(
+            migrations_dir.iterdir()
+        )
+        result["migration_dir"] = str(migrations_dir)
+        return result
+
+    # Detect SQLAlchemy usage even without Alembic
+    for py_file in _iter_project_files(project_dir, frozenset({".py"})):
+        try:
+            content = py_file.read_text(encoding="utf-8")
+            if "from sqlalchemy" in content or "import sqlalchemy" in content:
+                result["has_orm"] = True
+                result["orm_type"] = "sqlalchemy (no alembic)"
+                result["has_migrations"] = False
+                result["migration_dir"] = None
+                return result
+        except (UnicodeDecodeError, OSError):
+            continue
+
+    return result
+
+
 def post_build_validate(project_dir: Path, spec: dict) -> dict:
     """Run all post-build checks and fixes.
 
@@ -458,6 +676,41 @@ def validate_project(project_dir: Path, spec: dict | None = None) -> dict:
     if missing_rec:
         lines.append(f"   ⚠️  Missing recommended: {', '.join(missing_rec)}")
 
+    # ── Full-stack validation (non-blocking) ───────────────────
+    frontend_report = validate_frontend(project_dir)
+    ts_report = validate_typescript(project_dir)
+    docker_report = validate_docker_build(project_dir)
+    migration_report = validate_migrations(project_dir)
+
+    if frontend_report.get("has_frontend"):
+        if frontend_report.get("install_ok") is False:
+            lines.append("   ❌ Frontend: npm install failed")
+        elif frontend_report.get("build_ok") is False:
+            lines.append("   ❌ Frontend: build failed")
+        elif frontend_report.get("build_ok") is True:
+            lines.append("   ✅ Frontend: build passed")
+        else:
+            lines.append("   ✅ Frontend: install OK (no build script)")
+
+    if ts_report.get("has_typescript"):
+        if ts_report.get("tsc_ok"):
+            lines.append("   ✅ TypeScript: no type errors")
+        else:
+            lines.append("   ⚠️  TypeScript: type errors found")
+
+    if docker_report.get("has_dockerfile"):
+        if docker_report.get("build_ok"):
+            lines.append("   ✅ Docker: build passed")
+        else:
+            lines.append("   ⚠️  Docker: build failed")
+
+    if migration_report.get("has_orm"):
+        orm_type = migration_report.get("orm_type", "unknown")
+        if migration_report.get("has_migrations"):
+            lines.append(f"   ✅ Migrations: {orm_type} — migrations present")
+        else:
+            lines.append(f"   ⚠️  Migrations: {orm_type} — no migration files found")
+
     summary = "\n".join(lines)
     logger.info("\n{}", summary)
 
@@ -472,5 +725,9 @@ def validate_project(project_dir: Path, spec: dict | None = None) -> dict:
         "missing_spec_files": missing_spec,
         "missing_required": missing_req,
         "missing_recommended": missing_rec,
+        "frontend": frontend_report,
+        "typescript": ts_report,
+        "docker": docker_report,
+        "migrations": migration_report,
         "summary": summary,
     }

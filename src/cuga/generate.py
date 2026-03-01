@@ -298,13 +298,15 @@ async def build_project(
 ) -> None:
     """Run the CUGA agent to build the project from a structured spec.
 
-    Writes the spec to a temp file and delegates to main._run, which
-    already auto-detects rich vs simple spec formats.
+    Uses the BuildLoop for in-process build→validate→feedback→retry.
+    Records build results to the catalog automatically.
     """
+    from cuga.build_loop import BuildLoop, BuildLoopConfig
+    from cuga.main import _load_policy
     from cuga.main import _parse_args as main_parse_args
-    from cuga.main import _run
+    from cuga.main import _run_setup
 
-    # Save spec to a working file so main._run can load it
+    # Save spec to a working file
     spec_file = Path(output_dir) / "_active_spec.yaml"
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     spec_file.write_text(
@@ -326,19 +328,40 @@ async def build_project(
 
     args = main_parse_args(cli_args)
 
+    # Bootstrap MCP tools + agent via the shared setup helper
+    agent, workspace_root = await _run_setup(args)
+
+    policy_text = _load_policy(args.policy)
+
+    project_name = spec.get("name", "project")
+    project_dir = Path(output_dir) / project_name
+
+    loop_config = BuildLoopConfig(
+        max_iterations=int(os.environ.get("CUGA_MAX_ITERATIONS", "5")),
+    )
+
+    build_loop = BuildLoop(
+        spec=spec,
+        agent=agent,
+        project_dir=project_dir,
+        config=loop_config,
+        policy_text=policy_text,
+        workspace_root=workspace_root,
+    )
+
     t0 = time.time()
-    await _run(args)
+    result = await build_loop.run()
     elapsed = time.time() - t0
 
     # ── Post-build summary ─────────────────────────────────────
-    project_name = spec.get("name", "project")
-    project_dir = Path(output_dir) / project_name
     if project_dir.exists():
         files_on_disk = sorted(f for f in project_dir.rglob("*") if f.is_file())
         total_bytes = sum(f.stat().st_size for f in files_on_disk)
         print(f"\n{'─' * 50}")
+        status = "✅ PASSED" if result.passed else "❌ FAILED"
         print(
-            f"  Built {len(files_on_disk)} files ({total_bytes:,} bytes) in {elapsed:.1f}s"
+            f"  {status} — {len(files_on_disk)} files ({total_bytes:,} bytes) "
+            f"in {elapsed:.1f}s ({result.iteration} iteration(s))"
         )
         print(f"{'─' * 50}")
         for fp in files_on_disk:
@@ -346,18 +369,6 @@ async def build_project(
             size = fp.stat().st_size
             print(f"  {rel}  ({size:,} B)")
         print(f"{'─' * 50}")
-
-        # Record build in catalog for iterative optimization
-        try:
-            from cuga.build_catalog import record_build
-            from cuga.post_build import validate_project
-
-            report = validate_project(project_dir, spec)
-            record_build(spec, report, elapsed)
-        except Exception:  # catalog recording is non-critical
-            logger.debug(
-                "Build catalog recording skipped (non-critical)", exc_info=True
-            )
     else:
         logger.warning("Expected output dir {} not found", project_dir)
 

@@ -43,6 +43,8 @@ __all__ = [
     "get_lessons_for_prompt",
     "load_history",
     "load_optimizations",
+    "mine_lessons",
+    "prune_stale_lessons",
     "record_build",
 ]
 # ── Paths ──────────────────────────────────────────────────────
@@ -443,3 +445,193 @@ def _update_pattern_counts(
         )
         tmp_file.replace(opt_file)
         logger.debug("Updated pattern counts in optimizations.yaml")
+
+
+# ── Auto-mining lessons from build history ─────────────────────
+
+# Canonical smell patterns we know how to mine.  Each maps to a
+# lesson template that's added to ``by_pattern`` when the pattern
+# reaches the frequency threshold.
+_MINEABLE_PATTERNS: dict[str, dict[str, str]] = {
+    "bare_except": {
+        "lesson": "Replace bare except: with except Exception: or a specific exception class.",
+        "severity": "important",
+    },
+    "hardcoded_secret": {
+        "lesson": "Move all secrets to .env and load via os.environ or pydantic-settings BaseSettings.",
+        "severity": "critical",
+    },
+    "stub_function": {
+        "lesson": "Never write pass or raise NotImplementedError. Implement the full function body.",
+        "severity": "critical",
+    },
+    "wildcard_import": {
+        "lesson": "Replace 'from X import *' with explicit imports.",
+        "severity": "important",
+    },
+    "todo_comment": {
+        "lesson": "Do not leave TODO/FIXME comments — implement the feature fully.",
+        "severity": "important",
+    },
+    "placeholder": {
+        "lesson": "Do not write placeholder or 'Add X here' comments. Write the actual code.",
+        "severity": "critical",
+    },
+    "missing_import": {
+        "lesson": "After writing a file, verify all imports exist. Run ruff check immediately.",
+        "severity": "important",
+    },
+}
+
+
+def mine_lessons(
+    min_occurrences: int = 3,
+    catalog_dir: Path | None = None,
+) -> list[dict[str, str]]:
+    """Scan build history and auto-generate new ``by_pattern`` lessons.
+
+    Only adds lessons for patterns seen at least *min_occurrences* times
+    across ALL builds (not per-build).  Existing lessons are not duplicated.
+
+    Args:
+        min_occurrences: Minimum total smell count to promote to a lesson.
+        catalog_dir: Override catalog directory (for testing).
+
+    Returns:
+        List of newly added pattern dicts (empty if nothing new).
+    """
+    cat_dir = catalog_dir or CATALOG_DIR
+    records = load_history(cat_dir)
+    if not records:
+        return []
+
+    # Aggregate smell counts across all builds
+    totals: dict[str, int] = {}
+    for rec in records:
+        for pattern, count in rec.get("smell_counts", {}).items():
+            totals[pattern] = totals.get(pattern, 0) + count
+
+    # Load existing optimizations
+    opts = load_optimizations(cat_dir)
+    existing_patterns = set(opts.get("by_pattern", {}).keys())
+
+    new_lessons: list[dict[str, str]] = []
+
+    for pattern_name, total_count in totals.items():
+        if total_count < min_occurrences:
+            continue
+        if pattern_name in existing_patterns:
+            continue  # Already has a lesson
+        if pattern_name not in _MINEABLE_PATTERNS:
+            continue  # Unknown pattern — can't auto-generate a lesson
+
+        template = _MINEABLE_PATTERNS[pattern_name]
+        new_entry = {
+            "lesson": template["lesson"],
+            "severity": template["severity"],
+            "auto_count": total_count,
+            "source": "auto",
+        }
+
+        # Write to optimizations.yaml
+        if "by_pattern" not in opts:
+            opts["by_pattern"] = {}
+        opts[pattern_name] = new_entry
+        opts["by_pattern"][pattern_name] = new_entry
+        new_lessons.append({"pattern": pattern_name, **new_entry})
+
+    if new_lessons:
+        opt_file = cat_dir / "optimizations.yaml"
+        tmp_file = opt_file.with_suffix(".yaml.tmp")
+        tmp_file.write_text(
+            yaml.dump(opts, default_flow_style=False, sort_keys=False, width=120),
+            encoding="utf-8",
+        )
+        tmp_file.replace(opt_file)
+        logger.info(
+            "Mined {} new lessons from build history: {}",
+            len(new_lessons),
+            ", ".join(lesson["pattern"] for lesson in new_lessons),
+        )
+
+    return new_lessons
+
+
+def prune_stale_lessons(
+    max_age_days: int = 90,
+    min_builds: int = 10,
+    catalog_dir: Path | None = None,
+) -> list[str]:
+    """Remove auto-generated lessons whose patterns haven't recurred recently.
+
+    Only removes ``source: auto`` lessons. Human lessons are never pruned.
+    A lesson is "stale" if it was auto-generated, the pattern hasn't
+    appeared in the last *max_age_days* worth of builds, and there have
+    been at least *min_builds* since the pattern was last seen.
+
+    Args:
+        max_age_days: Days of inactivity before a lesson is pruned.
+        min_builds: Minimum total builds before pruning is considered.
+        catalog_dir: Override catalog directory (for testing).
+
+    Returns:
+        List of pruned pattern names.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    cat_dir = catalog_dir or CATALOG_DIR
+    records = load_history(cat_dir)
+    if len(records) < min_builds:
+        return []
+
+    opts = load_optimizations(cat_dir)
+    patterns = opts.get("by_pattern", {})
+    if not patterns:
+        return []
+
+    cutoff = datetime.now(tz=UTC) - timedelta(days=max_age_days)
+    pruned: list[str] = []
+
+    # Find the last occurrence of each pattern
+    last_seen: dict[str, str] = {}
+    for rec in records:
+        ts = rec.get("timestamp", "")
+        for pattern_name in rec.get("smell_counts", {}):
+            if not last_seen.get(pattern_name) or ts > last_seen[pattern_name]:
+                last_seen[pattern_name] = ts
+
+    for pattern_name, pattern_data in list(patterns.items()):
+        if not isinstance(pattern_data, dict):
+            continue
+        if pattern_data.get("source") != "auto":
+            continue  # Never prune human lessons
+
+        ts_str = last_seen.get(pattern_name, "")
+        if not ts_str:
+            # Pattern exists in YAML but was never seen in history — prune
+            del patterns[pattern_name]
+            pruned.append(pattern_name)
+            continue
+
+        try:
+            last_ts = datetime.fromisoformat(ts_str)
+            if last_ts.tzinfo is None:
+                last_ts = last_ts.replace(tzinfo=UTC)
+        except ValueError:
+            continue
+
+        if last_ts < cutoff:
+            del patterns[pattern_name]
+            pruned.append(pattern_name)
+
+    if pruned:
+        opt_file = cat_dir / "optimizations.yaml"
+        tmp_file = opt_file.with_suffix(".yaml.tmp")
+        tmp_file.write_text(
+            yaml.dump(opts, default_flow_style=False, sort_keys=False, width=120),
+            encoding="utf-8",
+        )
+        tmp_file.replace(opt_file)
+        logger.info("Pruned {} stale lessons: {}", len(pruned), ", ".join(pruned))
+
+    return pruned
