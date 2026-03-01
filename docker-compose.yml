@@ -15,10 +15,6 @@ services:
     volumes:
       - .:/workspace
       - ./mcp_servers.yaml:/app/mcp_servers.yaml
-    depends_on:
-      - github-mcp
-      - context7-mcp
-      - docker-mcp
     networks:
       - mcp-net
     restart: unless-stopped
@@ -56,90 +52,46 @@ services:
     restart: unless-stopped
 
   # ============================================================
-  # CODING MCPs
+  # BACKING SERVICES (databases for generated projects)
+  # ============================================================
+  # MCP dev-tool servers (github, context7, filesystem, desktop-
+  # commander, brave-search, postgres, memory, sequential-thinking,
+  # puppeteer) now run locally via stdio transport (npx).
+  # See mcp_servers_local.yaml.
   # ============================================================
 
-  # GitHub MCP — has native HTTP mode
-  github-mcp:
-    image: ghcr.io/github/github-mcp-server
-    container_name: github-mcp
+  # Dev PostgreSQL — used by generated projects and postgres MCP
+  postgres-dev:
+    image: postgres:16-alpine
+    container_name: postgres-dev
     ports:
-      - "8003:8000"
-    command: ["http", "--port", "8000"]
+      - "5432:5432"
     environment:
-      - GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_TOKEN}
-    networks:
-      - mcp-net
-    restart: unless-stopped
-
-  # Context7 MCP — stdio image, wrapped with supergateway → SSE
-  context7-mcp:
-    image: supercorp/supergateway
-    container_name: context7-mcp
-    ports:
-      - "8004:8000"
-    command:
-      - --stdio
-      - "npx -y @upstash/context7-mcp@latest"
-      - --port
-      - "8000"
-      - --healthEndpoint
-      - /healthz
-    networks:
-      - mcp-net
-    restart: unless-stopped
-
-  # Docker MCP — stdio image, wrapped with supergateway → SSE
-  docker-mcp:
-    image: supercorp/supergateway
-    container_name: docker-mcp
-    ports:
-      - "8005:8000"
-    command:
-      - --stdio
-      - "npx -y @modelcontextprotocol/server-docker"
-      - --port
-      - "8000"
-      - --healthEndpoint
-      - /healthz
+      POSTGRES_USER: cuga
+      POSTGRES_PASSWORD: cuga
+      POSTGRES_DB: cuga_dev
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cuga"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
       - mcp-net
     restart: unless-stopped
 
-  # Playwright MCP — stdio image, wrapped with supergateway → SSE
-  playwright-mcp:
-    image: supercorp/supergateway
-    container_name: playwright-mcp
+  # Dev Redis — caching, sessions, queues for generated projects
+  redis-dev:
+    image: redis:7-alpine
+    container_name: redis-dev
     ports:
-      - "8006:8000"
-    command:
-      - --stdio
-      - "npx -y @playwright/mcp@latest"
-      - --port
-      - "8000"
-      - --healthEndpoint
-      - /healthz
-    networks:
-      - mcp-net
-    restart: unless-stopped
-
-  # Filesystem MCP — stdio image, wrapped with supergateway → SSE
-  filesystem-mcp:
-    image: supercorp/supergateway
-    container_name: filesystem-mcp
-    ports:
-      - "8007:8000"
-    command:
-      - --stdio
-      - "npx -y @modelcontextprotocol/server-filesystem /projects/workspace"
-      - --port
-      - "8000"
-      - --healthEndpoint
-      - /healthz
-    volumes:
-      - .:/projects/workspace
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
       - mcp-net
     restart: unless-stopped
@@ -182,3 +134,4 @@ networks:
 
 volumes:
   langfuse-db-data:
+  pgdata:

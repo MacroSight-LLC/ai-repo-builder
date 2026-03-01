@@ -1,0 +1,514 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI Repo Builder Spec",
+  "description": "Schema for project specification YAML files",
+  "type": "object",
+  "required": [
+    "name",
+    "description",
+    "stack",
+    "structure",
+    "features",
+    "data_model"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Project name in kebab-case"
+    },
+    "description": {
+      "type": "string",
+      "description": "One paragraph project summary"
+    },
+    "version": {
+      "type": "string",
+      "default": "0.1.0"
+    },
+    "stack": {
+      "type": "object",
+      "required": [
+        "language",
+        "backend",
+        "database"
+      ],
+      "properties": {
+        "language": {
+          "type": "string",
+          "enum": [
+            "python",
+            "typescript",
+            "go",
+            "rust",
+            "java"
+          ]
+        },
+        "runtime": {
+          "type": "string"
+        },
+        "backend": {
+          "type": "object",
+          "required": [
+            "framework"
+          ],
+          "properties": {
+            "framework": {
+              "type": "string",
+              "enum": [
+                "fastapi",
+                "django",
+                "express",
+                "nestjs",
+                "gin",
+                "actix",
+                "spring"
+              ]
+            },
+            "api_style": {
+              "type": "string",
+              "enum": [
+                "rest",
+                "graphql",
+                "grpc",
+                "trpc"
+              ],
+              "default": "rest"
+            }
+          }
+        },
+        "frontend": {
+          "type": "object",
+          "properties": {
+            "framework": {
+              "type": "string",
+              "enum": [
+                "react",
+                "nextjs",
+                "vue",
+                "svelte",
+                "angular",
+                "none"
+              ]
+            },
+            "styling": {
+              "type": "string",
+              "enum": [
+                "tailwind",
+                "css-modules",
+                "styled-components",
+                "shadcn"
+              ]
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "zustand",
+                "redux",
+                "pinia",
+                "signals",
+                "none"
+              ]
+            },
+            "search": {
+              "type": "string"
+            }
+          }
+        },
+        "database": {
+          "type": "object",
+          "required": [
+            "primary"
+          ],
+          "properties": {
+            "primary": {
+              "type": "string",
+              "enum": [
+                "postgresql",
+                "mysql",
+                "mongodb",
+                "sqlite",
+                "dynamodb"
+              ]
+            },
+            "orm": {
+              "type": "string",
+              "enum": [
+                "sqlalchemy",
+                "prisma",
+                "gorm",
+                "diesel",
+                "typeorm",
+                "drizzle"
+              ]
+            },
+            "cache": {
+              "type": "string",
+              "enum": [
+                "redis",
+                "memcached",
+                "none"
+              ],
+              "default": "none"
+            },
+            "search": {
+              "type": "string",
+              "enum": [
+                "elasticsearch",
+                "meilisearch",
+                "none"
+              ],
+              "default": "none"
+            }
+          }
+        },
+        "infrastructure": {
+          "type": "object",
+          "properties": {
+            "containerization": {
+              "type": "string",
+              "enum": [
+                "docker",
+                "podman",
+                "none"
+              ],
+              "default": "docker"
+            },
+            "ci_cd": {
+              "type": "string",
+              "enum": [
+                "github-actions",
+                "gitlab-ci",
+                "none"
+              ],
+              "default": "github-actions"
+            },
+            "hosting": {
+              "type": "string",
+              "enum": [
+                "code-engine",
+                "vercel",
+                "aws",
+                "gcp",
+                "self-hosted"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "structure": {
+      "type": "object",
+      "required": [
+        "files"
+      ],
+      "properties": {
+        "directories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "purpose"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "purpose",
+              "key_contents"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "key_contents": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "details"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "auth",
+              "crud",
+              "realtime",
+              "integration",
+              "background",
+              "analytics"
+            ]
+          },
+          "details": {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string"
+              },
+              "flows": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "endpoints": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "business_logic": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "validations": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "security": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "data_model": {
+      "type": "object",
+      "required": [
+        "entities"
+      ],
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "fields"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "fields": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "type"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "constraints": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "relationships": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "target": {
+                      "type": "string"
+                    },
+                    "foreign_key": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "migrations": {
+          "type": "object",
+          "properties": {
+            "tool": {
+              "type": "string"
+            },
+            "seed_data": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "api": {
+      "type": "object",
+      "properties": {
+        "base_path": {
+          "type": "string",
+          "default": "/api/v1"
+        },
+        "versioning": {
+          "type": "string"
+        },
+        "auth_required": {
+          "type": "boolean",
+          "default": true
+        },
+        "rate_limiting": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "default": {
+              "type": "string"
+            }
+          }
+        },
+        "response_format": {
+          "type": "object",
+          "properties": {
+            "envelope": {
+              "type": "boolean"
+            },
+            "shape": {
+              "type": "string"
+            }
+          }
+        },
+        "documentation": {
+          "type": "object",
+          "properties": {
+            "openapi": {
+              "type": "boolean"
+            },
+            "path": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "testing": {
+      "type": "object",
+      "properties": {
+        "framework": {
+          "type": "string"
+        },
+        "types": {
+          "type": "object"
+        },
+        "fixtures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "deployment": {
+      "type": "object",
+      "properties": {
+        "environments": {
+          "type": "array"
+        },
+        "docker": {
+          "type": "object"
+        },
+        "ci_cd": {
+          "type": "object"
+        }
+      }
+    },
+    "standards": {
+      "type": "object",
+      "properties": {
+        "formatting": {
+          "type": "object"
+        },
+        "linting": {
+          "type": "object"
+        },
+        "typing": {
+          "type": "object"
+        },
+        "documentation": {
+          "type": "object"
+        },
+        "git": {
+          "type": "object"
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "properties": {
+        "authentication": {
+          "type": "string"
+        },
+        "authorization": {
+          "type": "string"
+        },
+        "input_validation": {
+          "type": "string"
+        },
+        "cors": {
+          "type": "object"
+        },
+        "secrets": {
+          "type": "string"
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

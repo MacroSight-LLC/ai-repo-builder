@@ -98,6 +98,9 @@ coverage.xml
 .ruff_cache/
 .pytest_cache/
 
+# Build catalog runtime data (optimizations.yaml IS tracked)
+catalog/build_history.jsonl
+
 # Docker / container ephemeral files
 docker-compose.override.yml
 

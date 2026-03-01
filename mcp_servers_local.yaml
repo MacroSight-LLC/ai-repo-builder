@@ -1,15 +1,71 @@
 mcpServers:
+  # ── Core ─────────────────────────────────────────────────────
+  # All servers use stdio transport (npx spawns the process locally).
+  # Environment variables are inherited from the parent process.
+
   github:
-    url: http://localhost:8003
-    transport: http
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-github"]
+    transport: stdio
     description: GitHub - repos, PRs, issues, branches, commits
 
   context7:
-    url: http://localhost:8004/sse
-    transport: sse
+    command: npx
+    args: ["-y", "@upstash/context7-mcp@latest"]
+    transport: stdio
     description: Context7 - accurate library docs, anti-hallucination
 
   filesystem:
-    url: http://localhost:8007/sse
-    transport: sse
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "./output"]
+    transport: stdio
     description: Filesystem - read, write, search files in workspace
+
+  # ── Full-Stack ─────────────────────────────────────────────
+  # Shell execution is handled by the native execute_command tool
+  # (src/cuga/shell_tool.py) — no MCP server needed.
+
+  brave-search:
+    command: npx
+    args: ["-y", "@brave/brave-search-mcp-server"]
+    transport: stdio
+    description: >-
+      Web search - research solutions, find examples, look up
+      niche library docs not in context7.
+
+  postgres:
+    command: npx
+    args:
+      [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://cuga:cuga@localhost:5432/cuga_dev",
+      ]
+    transport: stdio
+    description: >-
+      PostgreSQL - create tables, run migrations, verify schema,
+      seed data, test queries directly against the dev database.
+
+  memory:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-memory"]
+    transport: stdio
+    description: >-
+      Memory - store and retrieve decisions across agent steps.
+      Use to persist architecture choices so later files stay consistent.
+
+  sequential-thinking:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+    transport: stdio
+    description: >-
+      Structured reasoning - break complex problems into steps,
+      plan file dependencies, resolve architecture decisions.
+
+  puppeteer:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-puppeteer"]
+    transport: stdio
+    description: >-
+      Headless browser - verify frontend renders, screenshot pages,
+      check for console errors, test forms.

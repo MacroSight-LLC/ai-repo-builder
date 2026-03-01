@@ -1,0 +1,137 @@
+# ============================================================
+# AI Repo Builder — Optimization Catalog
+# ============================================================
+# This file is auto-populated from build history AND human-editable.
+# The system reads it before each build and injects matching lessons
+# into the agent prompt so the same mistake is never made twice.
+#
+# Structure:
+#   global:     Lessons that apply to every build
+#   by_stack:   Lessons keyed by language/framework combo
+#   by_pattern: Lessons keyed by recurring error pattern
+#
+# Severity: critical | important | tip
+# Source:   auto (mined from build_history.jsonl) | human
+# ============================================================
+
+global:
+  - id: g-001
+    severity: critical
+    lesson: "Always write .gitignore FIRST before any other file."
+    context: "Without .gitignore, the agent commits __pycache__, .env, and node_modules."
+    source: human
+    added: "2026-02-28"
+
+  - id: g-002
+    severity: critical
+    lesson: "Every shell command must cd into the project directory first."
+    context: "Commands run from workspace root create files in the wrong location."
+    source: human
+    added: "2026-02-28"
+
+  - id: g-003
+    severity: important
+    lesson: "Write .env.example with placeholder values, never real secrets."
+    context: "LLMs frequently hardcode example API keys that look real."
+    source: human
+    added: "2026-02-28"
+
+  - id: g-004
+    severity: important
+    lesson: "Run ruff check and ruff format BEFORE running tests."
+    context: "Syntax and import errors cause confusing test failures."
+    source: human
+    added: "2026-02-28"
+
+  - id: g-005
+    severity: tip
+    lesson: "Use memory tool to store architecture decisions early — refer back when writing later files."
+    context: "File 15 must be consistent with decisions made in file 1."
+    source: human
+    added: "2026-02-28"
+
+by_stack:
+  "python/fastapi":
+    - id: pf-001
+      severity: critical
+      lesson: "Use `from __future__ import annotations` in every .py file."
+      context: "Without it, PEP 604 unions (X | Y) fail on Python 3.10."
+      source: human
+      added: "2026-02-28"
+
+    - id: pf-002
+      severity: important
+      lesson: "FastAPI app must import and include all routers — don't forget app.include_router()."
+      context: "LLMs write routers but forget to register them in main.py."
+      source: human
+      added: "2026-02-28"
+
+    - id: pf-003
+      severity: important
+      lesson: "SQLAlchemy models need Base.metadata.create_all() or Alembic migrations — tables don't create themselves."
+      context: "LLMs define models but skip the migration setup, causing 'table not found' at runtime."
+      source: human
+      added: "2026-02-28"
+
+    - id: pf-004
+      severity: tip
+      lesson: "Pin all dependency versions in pyproject.toml — use >= not ==."
+      context: "Exact pins cause install failures when transitive deps conflict."
+      source: human
+      added: "2026-02-28"
+
+  "python/django":
+    - id: pd-001
+      severity: critical
+      lesson: "Run django-admin startproject first, then create apps — don't manually create settings.py."
+      context: "Hand-written settings.py always misses INSTALLED_APPS entries."
+      source: human
+      added: "2026-02-28"
+
+  "typescript/nextjs":
+    - id: tn-001
+      severity: critical
+      lesson: "Use App Router (app/) not Pages Router (pages/) for Next.js 14+."
+      context: "LLMs default to the deprecated pages/ pattern."
+      source: human
+      added: "2026-02-28"
+
+    - id: tn-002
+      severity: important
+      lesson: "Client components need 'use client' directive at the top."
+      context: "Without it, useState/useEffect fail with a cryptic server component error."
+      source: human
+      added: "2026-02-28"
+
+  "typescript/express":
+    - id: te-001
+      severity: important
+      lesson: "Configure tsconfig.json with strict: true and esModuleInterop: true."
+      context: "Without esModuleInterop, CommonJS imports fail silently."
+      source: human
+      added: "2026-02-28"
+
+by_pattern:
+  "bare_except":
+    lesson: "Replace bare except: with except Exception: or a specific exception class."
+    severity: important
+    auto_count: 0
+    source: auto
+
+  "hardcoded_secret":
+    lesson: "Move all secrets to .env and load via os.environ or pydantic-settings BaseSettings."
+    severity: critical
+    auto_count: 0
+    source: auto
+
+  "missing_import":
+    lesson: "After writing a file, verify all imports exist. Run ruff check immediately."
+    severity: important
+    auto_count: 0
+    source: auto
+
+  "stub_function":
+    lesson: "Never write pass or raise NotImplementedError. Implement the full function body."
+    severity: critical
+    auto_count: 0
+    source: auto

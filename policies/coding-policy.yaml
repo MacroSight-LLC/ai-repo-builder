@@ -1,3 +1,11 @@
+# ============================================================
+# AI Repo Builder — Coding Policy
+# ============================================================
+# Injected into the agent prompt. The agent MUST comply with
+# every rule. These standards ensure generated code is
+# production-grade, secure, and maintainable.
+# ============================================================
+
 reasoning_mode: deep
 max_tokens_per_step: 8192
 temperature: 0.1
@@ -8,20 +16,101 @@ priorities:
   - test_coverage
   - readability
 
-rules:
-  - Always write tests before implementation (TDD)
-  - Never hardcode secrets or API keys
-  - Use type hints on all Python functions
-  - Follow PEP8 and Black formatting
-  - Add docstrings to all public functions
-  - Use async/await for all I/O operations
-  - Run GitHub code scanning / dependency review after every deploy step
+# ── Python ─────────────────────────────────────────────────────
+python:
+  version: "3.11+"
+  style:
+    - "Use `from __future__ import annotations` in every file"
+    - "All functions must have full type hints (params + return)"
+    - "All classes and public functions must have docstrings (Google style)"
+    - "Use pathlib.Path instead of os.path"
+    - "Use f-strings, never .format() or % formatting"
+    - "Use `if __name__ == '__main__':` guard in entry points"
+    - "Prefer list/dict/set comprehensions over map/filter"
+
+  imports:
+    - "Group imports: stdlib → third-party → local (ruff handles this)"
+    - "Never use wildcard imports (from x import *)"
+    - "Never import inside functions unless for circular import avoidance"
+
+  error_handling:
+    - "Never use bare except — always catch specific exceptions"
+    - "Use custom exception classes for business logic errors"
+    - "Always log exceptions with logger.exception() not print()"
+    - "FastAPI endpoints: return proper HTTP status codes, not 500 for everything"
+
+  security:
+    - "NEVER hardcode secrets, passwords, API keys, or tokens"
+    - "All secrets via environment variables loaded from .env"
+    - "Use .env.example with placeholder values (never real secrets)"
+    - "Hash passwords with bcrypt or passlib, never store plaintext"
+    - "Validate all user input with Pydantic models"
+    - "Use parameterized queries — never string-concatenate SQL"
+
+  testing:
+    - "Every module gets a corresponding test file"
+    - "Use pytest fixtures for setup, not setUp/tearDown"
+    - "Use factories (or conftest fixtures) for test data, not hardcoded dicts"
+    - "Test edge cases: empty input, None, max length, duplicate entries"
+    - "Integration tests use a test database, never the dev database"
+
+  architecture:
+    - "Separate routes/controllers from business logic (service layer pattern)"
+    - "Database models in models/, schemas in schemas/, logic in services/"
+    - "Config via pydantic-settings BaseSettings class, not scattered os.getenv()"
+    - "Use dependency injection (FastAPI Depends) not global state"
+
+# ── FastAPI ────────────────────────────────────────────────────
+fastapi:
+  - "Use APIRouter for route grouping, not everything on the app"
+  - "Use Depends() for auth, db sessions, and shared logic"
+  - "Use response_model on every endpoint"
+  - "Use status_code parameter (status.HTTP_201_CREATED, etc.)"
+  - "Add tags to every router for OpenAPI grouping"
+  - "Include a health check endpoint at GET /health"
+
+# ── Database ───────────────────────────────────────────────────
+database:
+  - "Use Alembic for migrations, never raw CREATE TABLE"
+  - "Use async SQLAlchemy 2.0 style (select() not query())"
+  - "Every model must have: id, created_at, updated_at"
+  - "Use UUID primary keys, not auto-increment integers"
+  - "Add database indexes on frequently queried columns"
+  - "Foreign keys must have ondelete='CASCADE' or 'SET NULL' explicitly set"
+
+# ── Docker ─────────────────────────────────────────────────────
+docker:
+  - "Multi-stage Dockerfile: builder stage + slim runtime stage"
+  - "Non-root user in the runtime stage"
+  - "Use .dockerignore to exclude .venv, __pycache__, .git, .env"
+  - "Pin base image versions (python:3.11-slim, not python:latest)"
+  - "COPY requirements first, then code (layer caching)"
+
+# ── CI/CD ──────────────────────────────────────────────────────
+ci_cd:
+  - "GitHub Actions workflow with: lint → type-check → test → build"
+  - "Cache pip/npm dependencies between runs"
+  - "Run on push to main and pull_request"
+  - "Use matrix strategy for Python version testing if applicable"
+
+# ── Documentation ──────────────────────────────────────────────
+documentation:
+  - "README.md must include: description, quickstart, API docs link, testing"
+  - "Inline comments only for non-obvious logic — don't comment the obvious"
+
+# ── Tool calling ───────────────────────────────────────────────
+tool_calling_rules:
+  - 'CRITICAL: Call every tool DIRECTLY with await — e.g. result = await filesystem_write_file(path="src/main.py", content="...")'
+  - "NEVER wrap tool calls in asyncio.to_thread, asyncio.run, or lambdas — this silently drops the call"
+  - "NEVER batch multiple tool calls in a loop with asyncio.to_thread — call each tool sequentially with await"
+  - "After writing files, call filesystem_read_file to VERIFY the content was written correctly"
+  - "Write files one at a time so each call can be verified"
 
 tool_preference:
-  - Use context7 for all library documentation lookups
-  - Use filesystem for reading/writing code files
-  - Use github for all git operations (including security scanning)
-  - Use docker for build verification
+  - "Use context7 for all library documentation lookups"
+  - "Use filesystem for reading/writing code files"
+  - "Use github for all git operations (including security scanning)"
+  - "Use docker for build verification"
 
 retry_strategy:
   on_test_failure: rewrite failing module

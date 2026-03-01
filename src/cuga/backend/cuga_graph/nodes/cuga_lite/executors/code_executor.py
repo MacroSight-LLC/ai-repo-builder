@@ -1,19 +1,20 @@
-from typing import Any, List, Literal, Optional
+from typing import Any, Literal
+
+from loguru import logger
 
 from cuga.backend.activity_tracker.tracker import ActivityTracker
 from cuga.backend.cuga_graph.state.agent_state import AgentState
 from cuga.config import settings
-from loguru import logger
 
-from .common import SecurityValidator, CodeWrapper, VariableUtils, CallApiHelper
-from .common.benchmark_mode import is_benchmark_mode
-from .local import LocalExecutor
-from .e2b import E2BExecutor
-from .docker import DockerExecutor
 from .base_executor import BaseExecutor, RemoteExecutor
+from .common import CallApiHelper, CodeWrapper, SecurityValidator, VariableUtils
+from .common.benchmark_mode import is_benchmark_mode
+from .docker import DockerExecutor
+from .e2b import E2BExecutor
+from .local import LocalExecutor
 
 
-def format_execution_output(output: str, max_length: Optional[int] = None) -> str:
+def format_execution_output(output: str, max_length: int | None = None) -> str:
     """
     Format and trim execution output to prevent token overflow.
 
@@ -69,9 +70,9 @@ class CodeExecutor:
         code: str,
         _locals: dict[str, Any],
         state: AgentState,
-        thread_id: Optional[str] = None,
-        apps_list: Optional[List[str]] = None,
-        mode: Optional[Literal['local', 'e2b']] = None,
+        thread_id: str | None = None,
+        apps_list: list[str] | None = None,
+        mode: Literal["local", "e2b"] | None = None,
     ) -> tuple[str, dict[str, Any]]:
         """Execute code with async tools available in the local namespace.
 
@@ -90,23 +91,25 @@ class CodeExecutor:
         result = ""
 
         if mode is None:
-            mode = 'e2b' if settings.advanced_features.e2b_sandbox else 'local'
+            mode = "e2b" if settings.advanced_features.e2b_sandbox else "local"
 
         # Force local execution for short find_tools calls
-        code_lines = [line.strip() for line in code.split('\n') if line.strip()]
-        if len(code_lines) <= 3 and 'await find_tools' in code:
-            mode = 'local'
+        code_lines = [line.strip() for line in code.split("\n") if line.strip()]
+        if len(code_lines) <= 3 and "await find_tools" in code:
+            mode = "local"
 
         SecurityValidator.validate_imports(code)
 
         tracker = ActivityTracker()
-        fake_datetime = tracker.current_date if tracker.current_date and is_benchmark_mode() else None
+        fake_datetime = (
+            tracker.current_date if tracker.current_date and is_benchmark_mode() else None
+        )
         wrapped_code = CodeWrapper.wrap_code(code, fake_datetime=fake_datetime)
 
         SecurityValidator.validate_wrapped_code(wrapped_code)
 
         try:
-            if mode == 'e2b':
+            if mode == "e2b":
                 executor = cls._get_e2b_executor()
                 result, parsed_locals = await executor.execute_for_cuga_lite(
                     wrapped_code=wrapped_code,
@@ -118,10 +121,11 @@ class CodeExecutor:
                 _locals.update(parsed_locals)
             else:
                 executor = cls._get_local_executor()
+                _timeout = getattr(settings.advanced_features, "tool_call_timeout", 120)
                 result = await executor.execute(
                     wrapped_code=wrapped_code,
                     context_locals=_locals,
-                    timeout=30,
+                    timeout=_timeout,
                 )
 
         except Exception as e:
@@ -133,7 +137,7 @@ class CodeExecutor:
         # Includes:
         # - 'todos': Stateful task list that gets updated incrementally
         # - Generic output variables: Common names for final results that may be reassigned
-        always_include_keys = {'todos', 'result', 'results', 'output', 'outputs'}
+        always_include_keys = {"todos", "result", "results", "output", "outputs"}
 
         new_vars = VariableUtils.filter_new_variables(
             _locals, original_keys, always_include_keys=always_include_keys
@@ -157,9 +161,9 @@ class CodeExecutor:
         return result, new_vars
 
     @classmethod
-    def _wrap_code_for_code_agent(cls, code: str, fake_datetime: Optional[str] = None) -> str:
+    def _wrap_code_for_code_agent(cls, code: str, fake_datetime: str | None = None) -> str:
         """Wrap code for CodeAgent execution."""
-        indented_code = '\n'.join('    ' + line for line in code.split('\n'))
+        indented_code = "\n".join("    " + line for line in code.split("\n"))
 
         datetime_mock = CodeWrapper.create_datetime_mock(fake_datetime)
 
@@ -179,7 +183,7 @@ async def _async_main():
         """Prepare local variables for CodeAgent execution."""
         # Build call_api function internally
         call_api_function = CallApiHelper.create_local_call_api_function()
-        _locals = {'call_api': call_api_function}
+        _locals = {"call_api": call_api_function}
 
         if state.variables_manager:
             for var_name in state.variables_manager.get_variable_names():
@@ -191,11 +195,11 @@ async def _async_main():
 
     @classmethod
     async def _execute_remotely_for_code_agent(
-        cls, wrapped_code: str, state: AgentState, mode: Literal['e2b', 'docker']
+        cls, wrapped_code: str, state: AgentState, mode: Literal["e2b", "docker"]
     ) -> tuple[str, dict[str, Any]]:
         """Execute wrapped code in remote executor for CodeAgent."""
         try:
-            if mode == 'e2b':
+            if mode == "e2b":
                 executor = cls._get_e2b_executor()
             else:  # docker
                 executor = cls._get_docker_executor()
@@ -203,12 +207,12 @@ async def _async_main():
             result = await executor.execute_for_code_agent(
                 wrapped_code=wrapped_code,
                 state=state,
-                thread_id=state.thread_id if hasattr(state, 'thread_id') else None,
+                thread_id=state.thread_id if hasattr(state, "thread_id") else None,
             )
             return result, {}
         except Exception as e:
             logger.error(f"Error executing code in {mode}: {e}")
-            return f"Error during execution: {repr(e)}", {}
+            return f"Error during execution: {e!r}", {}
 
     @classmethod
     async def _execute_locally_for_code_agent(
@@ -217,10 +221,11 @@ async def _async_main():
         """Execute wrapped code locally for CodeAgent."""
         try:
             executor = cls._get_local_executor()
+            _timeout = getattr(settings.advanced_features, "tool_call_timeout", 120)
             result = await executor.execute(
                 wrapped_code=wrapped_code,
                 context_locals=context_locals,
-                timeout=30,
+                timeout=_timeout,
             )
             return result, {}
         except Exception as e:
@@ -233,7 +238,7 @@ async def _async_main():
         cls,
         code: str,
         state: AgentState,
-        mode: Optional[Literal['local', 'e2b', 'docker']] = None,
+        mode: Literal["local", "e2b", "docker"] | None = None,
     ) -> tuple[str, dict[str, Any]]:
         """Execute code for CodeAgent - expects JSON output on last line only.
 
@@ -252,13 +257,15 @@ async def _async_main():
             Tuple of (execution result string, empty dict)
         """
         if mode is None:
-            mode = 'e2b' if settings.advanced_features.e2b_sandbox else 'local'
+            mode = "e2b" if settings.advanced_features.e2b_sandbox else "local"
 
         tracker = ActivityTracker()
-        fake_datetime = tracker.current_date if tracker.current_date and is_benchmark_mode() else None
+        fake_datetime = (
+            tracker.current_date if tracker.current_date and is_benchmark_mode() else None
+        )
         wrapped_code = cls._wrap_code_for_code_agent(code, fake_datetime=fake_datetime)
 
-        if mode in ('e2b', 'docker'):
+        if mode in ("e2b", "docker"):
             return await cls._execute_remotely_for_code_agent(wrapped_code, state, mode)
         else:
             context_locals = cls._prepare_locals_for_code_agent(state)

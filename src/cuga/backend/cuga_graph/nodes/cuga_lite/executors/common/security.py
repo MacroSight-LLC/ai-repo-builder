@@ -43,7 +43,9 @@ class SecurityValidator:
     }
 
     SUSPICIOUS_PATTERNS: List[Tuple[str, str]] = [
-        (r'__', 'dunder method/attribute access'),
+        # NOTE: removed overly-broad r'__' catch-all – it blocks legitimate
+        # string content (e.g. __tablename__) written via MCP filesystem tools.
+        # Specific dangerous dunder patterns are listed individually below.
         (r'(?<!\w)os\.', 'os module method call'),
         (r'\.os\.', 'os module access via attribute'),
         (r'\.os\b', 'os attribute access'),

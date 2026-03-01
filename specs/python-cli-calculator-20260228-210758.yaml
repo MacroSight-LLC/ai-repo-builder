@@ -1,0 +1,113 @@
+name: python-cli-calculator
+description: A Python CLI calculator supporting basic arithmetic operations with testing
+version: 0.1.0
+stack:
+  language: python
+  runtime: python3.11
+  backend:
+    framework: none
+    api_style: none
+  database:
+    primary: none
+    orm: none
+    cache: none
+  infrastructure:
+    containerization: none
+    ci_cd: github-actions
+    hosting: none
+structure:
+  files:
+  - path: calculator.py
+    purpose: Main calculator logic implementation
+    key_contents:
+    - 'def add(x, y):'
+    - 'def subtract(x, y):'
+    - 'def multiply(x, y):'
+    - 'def divide(x, y):'
+  - path: main.py
+    purpose: CLI entry point
+    key_contents:
+    - import argparse
+    - from calculator import add, subtract, multiply, divide
+  - path: tests/test_calculator.py
+    purpose: Unit tests for calculator functions
+    key_contents:
+    - import pytest
+    - from calculator import add, subtract, multiply, divide
+    - 'def test_add():'
+    - 'def test_subtract():'
+    - 'def test_multiply():'
+    - 'def test_divide():'
+features:
+- name: Arithmetic Operations
+  type: crud
+  details:
+    business_logic:
+    - Addition of two numbers
+    - Subtraction of two numbers
+    - Multiplication of two numbers
+    - Division of two numbers with zero division handling
+    validations:
+    - Input must be numbers
+    - Division by zero should raise an error
+    endpoints: []
+data_model:
+  entities:
+  - name: Operation
+    fields:
+    - name: id
+      type: int
+      constraints:
+      - primary key
+    - name: num1
+      type: float
+      constraints: []
+    - name: num2
+      type: float
+      constraints: []
+    - name: operator
+      type: str
+      constraints:
+      - in ['+', '-', '*', '/']
+    relationships: []
+  migrations:
+    tool: none
+api:
+  base_path: none
+  auth_required: false
+  rate_limiting: none
+  response_format:
+    envelope: false
+    shape: '{}'
+testing:
+  framework: pytest
+  coverage_target: 90
+  fixtures:
+  - test numbers
+  patterns:
+  - Unit tests for each arithmetic operation
+  - Edge case testing for division by zero
+deployment:
+  ci_cd:
+    provider: github-actions
+    pipeline:
+    - Run pytest
+    - Check code formatting with ruff
+standards:
+  formatting: ruff
+  linting: ruff
+  typing: mypy
+  docstrings: google
+  git:
+    commit_convention: conventional
+security:
+  authentication: none
+  authorization: none
+  input_validation: strict
+  secrets: environment_variables_only
+  cors_origins: []
+  dependency_scanning: github-dependabot
+  frontend:
+    framework: none
+    styling: none
+    state: none

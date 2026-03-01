@@ -1,0 +1,130 @@
+name: fastapi-health-check
+description: A simple FastAPI application with a health check endpoint returning JSON
+version: 0.1.0
+stack:
+  language: python
+  runtime: python3.11
+  backend:
+    framework: fastapi
+    api_style: rest
+  database:
+    primary: postgresql
+    orm: sqlalchemy
+    cache: redis
+  infrastructure:
+    containerization: docker
+    ci_cd: github-actions
+    hosting: docker-compose
+structure:
+  files:
+  - path: main.py
+    purpose: Entry point for the FastAPI application
+    key_contents:
+    - FastAPI app instance creation
+    - Health check endpoint definition
+  - path: requirements.txt
+    purpose: Dependency management for the project
+    key_contents:
+    - fastapi
+    - uvicorn
+    - sqlalchemy
+    - psycopg2
+    - redis
+  - path: Dockerfile
+    purpose: Docker containerization for the application
+    key_contents:
+    - Python base image specification
+    - Dependency installation
+    - Application code copying
+  - path: docker-compose.yml
+    purpose: Orchestration for the application and its services
+    key_contents:
+    - Service definitions for the FastAPI app
+    - PostgreSQL database service
+    - Redis cache service
+  - path: .github/workflows/ci.yml
+    purpose: CI/CD pipeline definition for GitHub Actions
+    key_contents:
+    - Workflow trigger definitions
+    - Job steps for testing and building
+  - path: tests/test_health_check.py
+    purpose: Tests for the health check endpoint
+    key_contents:
+    - Test client creation
+    - Health check endpoint test case
+features:
+- name: Health Check
+  type: crud
+  details:
+    endpoints:
+    - GET /health - Returns the health status of the application
+    business_logic:
+    - Returns a JSON response indicating the application's health
+    validations:
+    - No input validation required for this endpoint
+data_model:
+  entities:
+  - name: HealthStatus
+    fields:
+    - name: status
+      type: string
+      constraints:
+      - not null
+    relationships: []
+  migrations:
+    tool: alembic
+api:
+  base_path: /api/v1
+  auth_required: false
+  rate_limiting: none
+  response_format:
+    envelope: false
+    shape: '{"status": "healthy"}'
+testing:
+  framework: pytest
+  coverage_target: 80
+  fixtures:
+  - test client fixture
+  patterns:
+  - Unit testing for endpoint logic
+  - Integration testing for API endpoints
+deployment:
+  docker:
+    multi_stage: true
+    base_image: python:3.11-slim
+    compose_services:
+    - name: app
+      image: fastapi-health-check:latest
+      ports:
+      - 8000:8000
+    - name: db
+      image: postgres:16
+      ports:
+      - 5432:5432
+    - name: redis
+      image: redis:7
+      ports:
+      - 6379:6379
+  ci_cd:
+    provider: github-actions
+    pipeline:
+    - Checkout code
+    - Install dependencies
+    - Run tests
+    - Build Docker image
+    - Push Docker image
+standards:
+  formatting: ruff
+  linting: ruff
+  typing: mypy
+  docstrings: google
+  git:
+    commit_convention: conventional
+security:
+  authentication: none
+  authorization: none
+  input_validation: basic
+  secrets: environment_variables_only
+  cors_origins:
+  - '*'
+  dependency_scanning: github-dependabot

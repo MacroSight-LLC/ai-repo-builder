@@ -2,7 +2,30 @@
 set -e
 
 # Clear any stale shell env vars that conflict with .env
-unset OPENAI_API_KEY OPENAI_BASE_URL MODEL_NAME AGENT_SETTING_CONFIG 2>/dev/null || true
+unset OPENAI_API_KEY OPENAI_BASE_URL MODEL_NAME AGENT_SETTING_CONFIG IBMCLOUD_API_KEY WATSONX_API_KEY WATSONX_APIKEY WATSONX_PROJECT_ID WATSONX_URL 2>/dev/null || true
+
+# ── Prerequisite checks ────────────────────────────────────────
+# Node.js 18+ is required for MCP servers (npx)
+if command -v npx &>/dev/null; then
+    NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
+    if [ "$NODE_VERSION" -lt 18 ]; then
+        echo "❌ Node.js v$NODE_VERSION found — need 18+. Run: brew install node"
+        exit 1
+    fi
+    echo "✅ Node.js v$(node -v | sed 's/v//') / npx available"
+else
+    echo "❌ npx not found. Install Node.js 18+: brew install node"
+    exit 1
+fi
+
+# Python 3.10+ required
+if command -v python3 &>/dev/null; then
+    PY_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    echo "✅ Python $PY_VERSION"
+else
+    echo "❌ python3 not found"
+    exit 1
+fi
 
 SPEC=${1:-"specs/example-spec.yaml"}
 MAX_ITERS=${MAX_ITERATIONS:-50}
