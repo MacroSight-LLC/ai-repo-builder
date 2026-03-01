@@ -288,6 +288,32 @@ async def generate_spec(
 # ── Stage 2: Spec → Project ───────────────────────────────────────
 
 
+def _load_post_build_settings() -> Any:
+    """Load post-build MCP settings from settings.toml.
+
+    Returns:
+        A ``PostBuildSettings`` instance with values from config or defaults.
+    """
+    from cuga.post_build_mcp import PostBuildSettings
+
+    try:
+        from cuga.config import settings as app_settings
+
+        mcp_cfg = getattr(app_settings, "mcp_integrations", None)
+        if mcp_cfg:
+            return PostBuildSettings(
+                docker_verify=getattr(mcp_cfg, "docker_verify", True),
+                qradar_scan=getattr(mcp_cfg, "qradar_scan", False),
+                auto_deploy=getattr(mcp_cfg, "auto_deploy", False),
+                instana_monitor=getattr(mcp_cfg, "instana_monitor", False),
+                devops_pipeline=getattr(mcp_cfg, "devops_pipeline", False),
+            )
+    except Exception:
+        pass
+
+    return PostBuildSettings()
+
+
 async def build_project(
     spec: dict,
     tools_path: str,
@@ -354,6 +380,26 @@ async def build_project(
     t0 = time.time()
     result = await build_loop.run()
     elapsed = time.time() - t0
+
+    # ── Post-build MCP actions (optional, best-effort) ─────────
+    if result.passed:
+        try:
+            from cuga.post_build_mcp import (
+                PostBuildSettings,
+                run_post_build_actions,
+            )
+
+            pb_settings = _load_post_build_settings()
+            pb_report = await run_post_build_actions(
+                project_dir=project_dir,
+                spec=spec,
+                mcp_manager=_mcp.manager,
+                settings=pb_settings,
+            )
+            if not pb_report.all_passed:
+                logger.warning("Some post-build actions failed (non-blocking)")
+        except Exception:
+            logger.debug("Post-build MCP actions skipped", exc_info=True)
 
     # ── Post-build summary ─────────────────────────────────────
     if project_dir.exists():

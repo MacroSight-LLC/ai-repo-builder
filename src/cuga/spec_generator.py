@@ -60,8 +60,10 @@ stack:
     cache       – redis | none
   infrastructure:
     containerization – docker
-    ci_cd       – github-actions | gitlab-ci | none
-    hosting     – docker-compose | kubernetes | vercel | none
+    ci_cd       – github-actions | gitlab-ci | tekton | none
+    hosting     – docker-compose | kubernetes | code-engine | vercel | none
+    monitoring  – instana | none
+    security_scan – qradar | github-code-scanning | none
 
 structure:
   files:        – list of objects, each with:
@@ -134,8 +136,11 @@ deployment:
     base_image   – e.g. python:3.11-slim
     compose_services: – list of {name, image (optional), ports} objects
   ci_cd:
-    provider    – github-actions | gitlab-ci | none
+    provider    – github-actions | gitlab-ci | tekton | none
     pipeline    – ordered list of step descriptions
+  deploy_target – docker-compose | kubernetes | code-engine | vercel | none
+  monitoring   – instana | none
+  security_scan – qradar | github-code-scanning | none
 
 standards:
   formatting    – ruff | prettier | gofmt
@@ -206,6 +211,9 @@ TECHNOLOGY DEFAULTS (when user does not specify):
   Cache → Redis 7
   Auth → JWT with refresh tokens
   Deploy → Docker + GitHub Actions
+  CI/CD → github-actions (default) | tekton (if IBM Cloud)
+  Monitoring → instana (if IBM Cloud) | none
+  Security → github-code-scanning (default) | qradar (if IBM Cloud)
   State management → zustand (lightweight) or React Server Components (Next.js)
 
 Output ONLY the YAML content.  No markdown fences.  No explanatory prose.

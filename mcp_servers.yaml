@@ -1,14 +1,22 @@
 mcpServers:
-  # IBM
-  # qradar:                          # disabled — overkill for repo builder
-  #   url: http://qradar-mcp:8000
-  #   description: IBM QRadar SIEM - security audits, offense queries, AQL
+  # ── IBM ─────────────────────────────────────────────────────
+  qradar:
+    url: http://qradar-mcp:8000
+    description: IBM QRadar SIEM - security audits, offense queries, AQL
 
   code-engine:
     url: http://code-engine-mcp:8000
     description: IBM Code Engine - deploy, preview, manage apps
 
-  # Coding
+  devops:
+    url: http://devops-mcp:8000
+    description: IBM DevOps - CI/CD pipelines, toolchain management
+
+  instana:
+    url: http://instana-mcp:8000
+    description: IBM Instana - APM observability, metrics, alerts
+
+  # ── Coding ──────────────────────────────────────────────────
   github:
     url: http://github-mcp:8000
     transport: http
@@ -23,6 +31,10 @@ mcpServers:
     url: http://docker-mcp:8000/sse
     transport: sse
     description: Docker - build, run, manage containers
+
+  terminal:
+    url: http://terminal-mcp:8000
+    description: Terminal - secure shell execution with allowlisted commands
 
   playwright:
     url: http://playwright-mcp:8000/sse

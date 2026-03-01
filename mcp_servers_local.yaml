@@ -22,8 +22,22 @@ mcpServers:
     description: Filesystem - read, write, search files in workspace
 
   # ── Full-Stack ─────────────────────────────────────────────
-  # Shell execution is handled by the native execute_command tool
-  # (src/cuga/shell_tool.py) — no MCP server needed.
+
+  docker:
+    command: npx
+    args: ["-y", "@docker/mcp-server"]
+    transport: stdio
+    description: >-
+      Docker - build images, run containers, manage compose stacks.
+      Use to verify Dockerfiles build correctly during iteration.
+
+  terminal:
+    command: python
+    args: ["-m", "cuga.terminal_mcp_server"]
+    transport: stdio
+    description: >-
+      Terminal - secure shell execution with allowlisted commands.
+      Use for pip install, npm install, pytest, ruff, git, curl, etc.
 
   brave-search:
     command: npx
@@ -69,3 +83,28 @@ mcpServers:
     description: >-
       Headless browser - verify frontend renders, screenshot pages,
       check for console errors, test forms.
+
+  # ── IBM (optional — requires IBM Cloud credentials) ────────
+  # These connect to HTTP services you must start via docker compose
+  # or use the IBM Cloud-hosted instances.
+
+  code-engine:
+    url: http://localhost:8002
+    description: >-
+      IBM Code Engine - deploy containerized apps to IBM Cloud.
+      Requires IBMCLOUD_API_KEY, CODE_ENGINE_PROJECT, CODE_ENGINE_REGION.
+
+  # Uncomment when you have IBM DevOps Toolchain access:
+  # devops:
+  #   url: http://localhost:8003
+  #   description: IBM DevOps - CI/CD pipelines, toolchain management
+
+  # Uncomment when you have QRadar access:
+  # qradar:
+  #   url: http://localhost:8001
+  #   description: IBM QRadar SIEM - security audits, offense queries
+
+  # Uncomment when you have Instana access:
+  # instana:
+  #   url: http://localhost:8004
+  #   description: IBM Instana - APM observability, metrics, alerts

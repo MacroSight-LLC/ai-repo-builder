@@ -83,6 +83,13 @@ auto_load_policies = true  # Automatically load policies from .cuga folder on st
 instance_id = ""  # Override with DYNACONF_SERVICE__INSTANCE_ID env var (e.g. K8S pod name, deployment id)
 tenant_id = ""  # Override with DYNACONF_SERVICE__TENANT_ID env var (multi-tenant SaaS)
 
+[mcp_integrations]
+docker_verify = true    # Verify Dockerfile builds during post-build (requires Docker MCP)
+qradar_scan = false     # Post-build security scan via IBM QRadar (requires QRadar MCP + credentials)
+auto_deploy = false     # Auto-deploy to IBM Code Engine after build passes (requires Code Engine MCP)
+instana_monitor = false # Auto-setup Instana APM monitoring after deploy (requires Instana MCP)
+devops_pipeline = false # Auto-create IBM DevOps CI/CD pipeline after build (requires DevOps MCP)
+
 [auth]
 enabled = false
 session_cookie_name = "cuga_session"

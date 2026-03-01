@@ -23,20 +23,18 @@ services:
   # IBM MCPs
   # ============================================================
 
-  # QRadar MCP — disabled (overkill for repo builder; use GitHub code scanning)
-  # Uncomment + add Wazuh later if MacroSight needs a real SIEM.
-  # qradar-mcp:
-  #   image: ghcr.io/ibm/qradar-mcp-server:latest
-  #   container_name: qradar-mcp
-  #   ports:
-  #     - "8001:8000"
-  #   environment:
-  #     - QRADAR_HOST=${QRADAR_HOST}
-  #     - QRADAR_API_TOKEN=${QRADAR_API_TOKEN}
-  #     - QRADAR_PORT=${QRADAR_PORT}
-  #   networks:
-  #     - mcp-net
-  #   restart: unless-stopped
+  qradar-mcp:
+    image: ghcr.io/ibm/qradar-mcp-server:latest
+    container_name: qradar-mcp
+    ports:
+      - "8001:8000"
+    environment:
+      - QRADAR_HOST=${QRADAR_HOST}
+      - QRADAR_API_TOKEN=${QRADAR_API_TOKEN}
+      - QRADAR_PORT=${QRADAR_PORT:-443}
+    networks:
+      - mcp-net
+    restart: unless-stopped
 
   code-engine-mcp:
     image: ghcr.io/greyhoundforty/code-engine-mcp:latest
@@ -51,13 +49,74 @@ services:
       - mcp-net
     restart: unless-stopped
 
+  devops-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: devops-mcp
+    command: ["python", "-m", "cuga.devops_mcp_server"]
+    ports:
+      - "8003:8000"
+    environment:
+      - IBMCLOUD_API_KEY=${IBMCLOUD_API_KEY}
+      - IBMCLOUD_REGION=${IBMCLOUD_REGION:-us-south}
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
+  instana-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: instana-mcp
+    command: ["python", "-m", "cuga.instana_mcp_server"]
+    ports:
+      - "8004:8000"
+    environment:
+      - INSTANA_API_TOKEN=${INSTANA_API_TOKEN}
+      - INSTANA_BASE_URL=${INSTANA_BASE_URL}
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
+  # ============================================================
+  # CODING MCPs
+  # ============================================================
+
+  docker-mcp:
+    image: alpine/socat
+    container_name: docker-mcp
+    command: TCP-LISTEN:8000,fork,reuseaddr UNIX-CONNECT:/var/run/docker.sock
+    ports:
+      - "8005:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
+  terminal-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: terminal-mcp
+    command: ["python", "-m", "cuga.terminal_mcp_server"]
+    ports:
+      - "8006:8000"
+    environment:
+      - CUGA_OUTPUT_DIR=/workspace/output
+    volumes:
+      - .:/workspace
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
   # ============================================================
   # BACKING SERVICES (databases for generated projects)
   # ============================================================
-  # MCP dev-tool servers (github, context7, filesystem, desktop-
-  # commander, brave-search, postgres, memory, sequential-thinking,
-  # puppeteer) now run locally via stdio transport (npx).
-  # See mcp_servers_local.yaml.
+  # MCP dev-tool servers (github, context7, filesystem, brave-search,
+  # postgres, memory, sequential-thinking, puppeteer) run locally
+  # via stdio transport (npx). See mcp_servers_local.yaml.
   # ============================================================
 
   # Dev PostgreSQL — used by generated projects and postgres MCP
