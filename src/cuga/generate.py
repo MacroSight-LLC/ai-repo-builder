@@ -293,11 +293,14 @@ async def build_project(
     tools_path: str,
     policy_path: str | None,
     output_dir: str,
-) -> None:
+) -> bool:
     """Run the CUGA agent to build the project from a structured spec.
 
     Uses the BuildLoop for in-process build→validate→feedback→retry.
     Records build results to the catalog automatically.
+
+    Returns:
+        True if the build passed the quality gate, False otherwise.
     """
     from cuga.build_loop import BuildLoop, BuildLoopConfig
     from cuga.main import _load_policy, _run_setup
@@ -371,6 +374,7 @@ async def build_project(
     else:
         logger.warning("Expected output dir {} not found", project_dir)
 
+    return result.passed
 
 # ── Pretty-print helpers ──────────────────────────────────────────
 
@@ -416,20 +420,26 @@ def _print_spec_summary(spec: dict) -> None:
     print("=" * 60 + "\n")
 
 
-def _print_build_success(spec: dict, output_dir: str) -> None:
-    """Print the build-complete success message.
+def _print_build_result(spec: dict, output_dir: str, passed: bool) -> None:
+    """Print the build-complete result message.
 
     Args:
         spec: The project spec.
         output_dir: Output directory path.
+        passed: Whether the build passed the quality gate.
     """
     project_name = spec.get("name", "project")
     gh = spec.get("github", {})
-    if gh.get("create_repo"):
-        owner = gh.get("owner") or os.environ.get("GITHUB_OWNER", "")
-        print(f"\n✅ Project built and pushed! https://github.com/{owner}/{project_name}")
+    if passed:
+        if gh.get("create_repo"):
+            owner = gh.get("owner") or os.environ.get("GITHUB_OWNER", "")
+            print(f"\n✅ Project built and pushed! https://github.com/{owner}/{project_name}")
+        else:
+            print(f"\n✅ Project built! Check: {output_dir}/{project_name}/")
     else:
-        print(f"\n✅ Project built! Check: {output_dir}/{project_name}/")
+        print(f"\n⚠️  Build completed with issues. Check: {output_dir}/{project_name}/")
+        print("   Run validation manually: python -m cuga.post_build validate "
+              f"{output_dir}/{project_name}/")
 
 
 # ── Main ──────────────────────────────────────────────────────────
@@ -465,13 +475,13 @@ async def _run_pipeline(args: argparse.Namespace) -> None:
                 return
 
         print("\n🔨 Stage 2: Building project with CUGA agent...\n")
-        await build_project(
+        passed = await build_project(
             spec=spec,
             tools_path=args.tools,
             policy_path=args.policy,
             output_dir=args.output,
         )
-        _print_build_success(spec, args.output)
+        _print_build_result(spec, args.output, passed)
         return
 
     # ── Get user input ─────────────────────────────────────────
@@ -559,14 +569,14 @@ async def _run_pipeline(args: argparse.Namespace) -> None:
 
     # ── Stage 2: Build project ─────────────────────────────────
     print("\n🔨 Stage 2: Building project with CUGA agent...\n")
-    await build_project(
+    passed = await build_project(
         spec=spec,
         tools_path=args.tools,
         policy_path=args.policy,
         output_dir=args.output,
     )
 
-    _print_build_success(spec, args.output)
+    _print_build_result(spec, args.output, passed)
 
 
 def _run_async(coro: Any) -> Any:

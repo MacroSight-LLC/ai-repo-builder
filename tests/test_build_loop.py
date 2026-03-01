@@ -116,6 +116,7 @@ class TestCheckQualityGate:
             "lint_passed": True,
             "missing_spec_files": [],
             "missing_required": [],
+            "files_total": 5,
         }
         assert _check_quality_gate(report, BuildLoopConfig()) is True
 
@@ -126,6 +127,7 @@ class TestCheckQualityGate:
             "lint_passed": True,
             "missing_spec_files": [],
             "missing_required": [],
+            "files_total": 5,
         }
         assert _check_quality_gate(report, BuildLoopConfig()) is False
 
@@ -136,6 +138,7 @@ class TestCheckQualityGate:
             "lint_passed": True,
             "missing_spec_files": [],
             "missing_required": [],
+            "files_total": 5,
         }
         assert _check_quality_gate(report, BuildLoopConfig()) is False
 
@@ -146,6 +149,7 @@ class TestCheckQualityGate:
             "lint_passed": True,
             "missing_spec_files": [],
             "missing_required": [],
+            "files_total": 5,
         }
         assert _check_quality_gate(report, BuildLoopConfig()) is True
 
@@ -156,6 +160,7 @@ class TestCheckQualityGate:
             "lint_passed": True,
             "missing_spec_files": [],
             "missing_required": [".gitignore"],
+            "files_total": 5,
         }
         assert _check_quality_gate(report, BuildLoopConfig()) is False
 
@@ -166,6 +171,7 @@ class TestCheckQualityGate:
             "lint_passed": True,
             "missing_spec_files": ["api/routes.py"],
             "missing_required": [],
+            "files_total": 5,
         }
         config = BuildLoopConfig(require_all_spec_files=True)
         assert _check_quality_gate(report, config) is False
@@ -177,6 +183,7 @@ class TestCheckQualityGate:
             "lint_passed": True,
             "missing_spec_files": ["api/routes.py"],
             "missing_required": [],
+            "files_total": 5,
         }
         config = BuildLoopConfig(require_all_spec_files=False)
         assert _check_quality_gate(report, config) is True
@@ -189,6 +196,7 @@ class TestCheckQualityGate:
             "lint_output": "E501 line too long",
             "missing_spec_files": [],
             "missing_required": [],
+            "files_total": 5,
         }
         assert _check_quality_gate(report, BuildLoopConfig()) is True
 
@@ -200,6 +208,7 @@ class TestCheckQualityGate:
             "lint_output": "E501 line too long",
             "missing_spec_files": [],
             "missing_required": [],
+            "files_total": 5,
         }
         config = BuildLoopConfig(require_lint_pass=True)
         assert _check_quality_gate(report, config) is False
@@ -214,6 +223,7 @@ class TestCheckQualityGate:
             "lint_passed": True,
             "missing_spec_files": [],
             "missing_required": [],
+            "files_total": 5,
         }
         config = BuildLoopConfig(max_syntax_errors=2)
         assert _check_quality_gate(report, config) is True

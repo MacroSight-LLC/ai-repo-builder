@@ -67,8 +67,22 @@ structure:
   files:        – list of objects, each with:
       path          – relative filepath
       purpose       – what this file does
-      key_contents  – list of strings describing what must go inside the file
-                      (include typed function signatures, not just prose)
+      key_contents  – list of 5-15 strings, each describing a specific element
+                      that must appear in the file. Include:
+                      * Typed function/class signatures (not just names)
+                      * Import statements showing dependencies
+                      * Configuration values and constants
+                      * Integration points (routes registered, middleware used)
+                      WRONG (too vague): "FastAPI app setup"
+                      WRONG (one-liner stub): "from fastapi import FastAPI; app = FastAPI()"
+                      RIGHT: ["from fastapi import FastAPI",
+                              "from fastapi.middleware.cors import CORSMiddleware",
+                              "app = FastAPI(title='...', version='0.1.0')",
+                              "app.add_middleware(CORSMiddleware, ...)",
+                              "app.include_router(auth_router, prefix='/api/v1/auth')",
+                              "app.include_router(tasks_router, prefix='/api/v1/tasks')",
+                              "@app.on_event('startup') async def startup(): ...",
+                              "Exception handlers for HTTPException and validation errors"]
 
 pages:          – list of objects (for apps with a frontend UI), each with:
     path        – URL route path (e.g. "/" or "/dashboard")
@@ -142,8 +156,11 @@ security:
 RULES:
 1. ALWAYS include every section listed above.  Never skip a section.
 2. If the user does not specify a technology, choose the BEST modern option.
-3. Every file in the structure section MUST have key_contents with typed function
-   signatures and concrete implementation descriptions, not vague prose.
+3. Every file in the structure section MUST have key_contents with 5-15 items.
+   Each item should be a typed function signature, specific import, config value,
+   or concrete implementation detail — NEVER one-liner stubs or vague prose.
+   If a file would realistically have 50+ lines of code, key_contents MUST have
+   at least 8-10 items describing the major pieces.
 4. Every CRUD feature MUST have detailed endpoints with request/response shapes.
 5. Every data-model entity MUST have complete field definitions with types.
 6. The spec must be detailed enough that a developer could build the entire
@@ -162,10 +179,23 @@ RULES:
     - Dockerfile (multi-stage, production-ready)
     - docker-compose.yaml (app + database + any other services)
     - .github/workflows/ci.yaml (lint → test → build pipeline)
-12. For full-stack apps the pages section MUST list every user-facing route.
-13. For full-stack apps the components section MUST define reusable UI components
+12. For full-stack apps the structure.files MUST ALSO include separate files for:
+    - Database models (e.g., backend/models.py or backend/models/)
+    - API route handlers (e.g., backend/routers/tasks.py, backend/routers/auth.py)
+    - Auth utilities (e.g., backend/auth.py — JWT creation, password hashing)
+    - Database connection/session (e.g., backend/database.py)
+    - Pydantic schemas (e.g., backend/schemas.py)
+    - Frontend pages for EACH route (e.g., frontend/app/tasks/page.tsx)
+    - Reusable components (e.g., frontend/components/TaskList.tsx)
+    - API client/hooks (e.g., frontend/lib/api.ts)
+    - Frontend layout with styling imports
+    - Tailwind config (tailwind.config.js/ts)
+    - TypeScript config (tsconfig.json)
+    A typical full-stack app should have 20-35 files in the spec.
+13. For full-stack apps the pages section MUST list every user-facing route.
+14. For full-stack apps the components section MUST define reusable UI components
     with their props interface and children hierarchy.
-14. Every component in key_contents should specify its props interface as a
+15. Every component in key_contents should specify its props interface as a
     TypeScript-style type (e.g. "props: { items: Item[]; onDelete: (id: string) => void }").
 
 TECHNOLOGY DEFAULTS (when user does not specify):

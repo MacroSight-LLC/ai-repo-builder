@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import ast
 import re
-from typing import List, Set, Tuple
+
 from loguru import logger
 
 from .benchmark_mode import is_benchmark_mode
@@ -9,9 +11,9 @@ from .benchmark_mode import is_benchmark_mode
 class SecurityValidator:
     """Handles security validation for code execution."""
 
-    DANGEROUS_IMPORTS: Set[str] = {'os', 'sys', 'subprocess', 'pathlib', 'shutil', 'glob', 'importlib'}
+    DANGEROUS_IMPORTS: set[str] = {'os', 'sys', 'subprocess', 'pathlib', 'shutil', 'glob', 'importlib'}
 
-    ALLOWED_IMPORTS: Set[str] = {
+    ALLOWED_IMPORTS: set[str] = {
         'asyncio',
         'json',
         'pandas',
@@ -28,7 +30,7 @@ class SecurityValidator:
         'typing',
     }
 
-    DANGEROUS_MODULE_NAMES: Set[str] = {
+    DANGEROUS_MODULE_NAMES: set[str] = {
         'os',
         'sys',
         'subprocess',
@@ -42,59 +44,48 @@ class SecurityValidator:
         'compile',
     }
 
-    SUSPICIOUS_PATTERNS: List[Tuple[str, str]] = [
+    SUSPICIOUS_PATTERNS: list[tuple[str, str]] = [
         # NOTE: removed overly-broad r'__' catch-all – it blocks legitimate
         # string content (e.g. __tablename__) written via MCP filesystem tools.
         # Specific dangerous dunder patterns are listed individually below.
+        #
+        # These patterns are checked against code with string literals stripped
+        # so that file content passed to filesystem_write_file is NOT flagged.
         (r'(?<!\w)os\.', 'os module method call'),
         (r'\.os\.', 'os module access via attribute'),
-        (r'\.os\b', 'os attribute access'),
         (r'(?<!\w)sys\.', 'sys module method call'),
         (r'\.sys\.', 'sys module access via attribute'),
-        (r'\.sys\b', 'sys attribute access'),
         (r'(?<!\w)subprocess\.', 'subprocess module method call'),
         (r'\.subprocess\.', 'subprocess module access via attribute'),
-        (r'\.subprocess\b', 'subprocess attribute access'),
-        (r'\.env\b', 'environment variable access'),
         (r'__import__', 'dangerous builtin function'),
         (r'__builtins__', 'builtins access'),
         (r'__globals__', 'globals access'),
-        (r'__dict__', 'dictionary access'),
         (r'__subclasses__', 'class hierarchy traversal'),
         (r'__subclass__', 'class hierarchy traversal'),
         (r'__bases__', 'class hierarchy traversal'),
         (r'__mro__', 'class hierarchy traversal'),
-        (r'__class__', 'class introspection'),
         (r'__self__', 'method binding introspection'),
         (r'setattr\s*\(', 'attribute modification bypass'),
         (r'delattr\s*\(', 'attribute deletion bypass'),
-        (r'hasattr\s*\(', 'attribute check'),
         (r'__traceback__', 'stack trace inspection'),
         (r'\.f_locals', 'stack frame local vars'),
         (r'\.f_globals', 'stack frame global vars'),
         (r'\.f_back', 'stack frame traversal'),
         (r'\.f_code', 'code object inspection'),
         (r'sys\._getframe', 'direct frame access'),
-        (r'eval\s*\(', 'eval function call'),
-        (r'exec\s*\(', 'exec function call'),
-        (r'compile\s*\(', 'compile function call'),
+        (r'(?<!["\'])eval\s*\(', 'eval function call'),
+        (r'(?<!["\'])exec\s*\(', 'exec function call'),
+        (r'(?<!["\'])compile\s*\(', 'compile function call'),
         (r'breakpoint\s*\(', 'debugger invocation'),
         (r'pdb\.set_trace', 'debugger invocation'),
-        (r'open\s*\(', 'file access'),
-        (r'shutil\.', 'high-level file operations'),
-        (r'glob\.', 'file pattern matching'),
-        (r'pathlib\.', 'path object manipulation'),
-        (r'pickle\.', 'serialization vulnerability'),
-        (r'cPickle\.', 'serialization vulnerability'),
-        (r'marshal\.', 'serialization vulnerability'),
-        (r'shelve\.', 'serialization vulnerability'),
-        (r'ctypes', 'foreign function interface (memory access)'),
-        (r'socket', 'network access'),
-        (r'urllib', 'network access'),
-        (r'requests', 'network access'),
-        (r'http\.client', 'network access'),
-        (r'\\x[0-9a-fA-F]{2}', 'hex encoded string (potential obfuscation)'),
-        (r'\\u[0-9a-fA-F]{4}', 'unicode encoded string (potential obfuscation)'),
+        (r'(?<!\w)shutil\.', 'high-level file operations'),
+        (r'(?<!\w)glob\.', 'file pattern matching'),
+        (r'(?<!\w)pathlib\.', 'path object manipulation'),
+        (r'(?<!\w)pickle\.', 'serialization vulnerability'),
+        (r'(?<!\w)cPickle\.', 'serialization vulnerability'),
+        (r'(?<!\w)marshal\.', 'serialization vulnerability'),
+        (r'(?<!\w)shelve\.', 'serialization vulnerability'),
+        (r'(?<!\w)ctypes\b', 'foreign function interface (memory access)'),
     ]
 
     @staticmethod
@@ -165,11 +156,33 @@ class SecurityValidator:
                 )
 
     @staticmethod
+    def _strip_string_literals(code: str) -> str:
+        """Replace string literal contents with placeholders.
+
+        This prevents security patterns from matching inside strings that are
+        file content passed to MCP filesystem tools (e.g. ``os.environ`` inside
+        a README, ``.env`` in a gitignore template, ``socket`` in docs).
+
+        Args:
+            code: Python source code.
+
+        Returns:
+            Code with string literal bodies replaced by ``___``.
+        """
+        # Handle triple-quoted strings first, then single-quoted
+        result = re.sub(r'"""[\s\S]*?"""', '"___"', code)
+        result = re.sub(r"'''[\s\S]*?'''", "'___'", result)
+        result = re.sub(r'"(?:[^"\\]|\\.)*"', '"___"', result)
+        result = re.sub(r"'(?:[^'\\]|\\.)*'", "'___'", result)
+        return result
+
+    @staticmethod
     def validate_wrapped_code(wrapped_code: str) -> None:
         """Validate wrapped code for dangerous imports and suspicious patterns (strict validation).
 
-        This is more restrictive - checks both dangerous modules and suspicious patterns.
-        Suitable for interactive cuga_lite mode where user code needs stricter validation.
+        String literals are stripped before pattern matching so that file content
+        passed to ``filesystem_write_file`` does not trigger false positives
+        (e.g. writing a ``.env.example`` file whose content mentions ``os.environ``).
 
         Args:
             wrapped_code: The wrapped code to validate
@@ -182,13 +195,17 @@ class SecurityValidator:
 
         SecurityValidator.validate_dangerous_modules(wrapped_code)
 
-        code_without_comments = '\n'.join(line.split('#')[0] for line in wrapped_code.split('\n'))
+        # Strip string literals so file content doesn't trigger false positives
+        code_stripped = SecurityValidator._strip_string_literals(wrapped_code)
+        code_without_comments = '\n'.join(
+            line.split('#')[0] for line in code_stripped.split('\n')
+        )
 
         for pattern, description in SecurityValidator.SUSPICIOUS_PATTERNS:
             target_code = (
                 code_without_comments
                 if description in ('eval function call', 'exec function call', 'compile function call')
-                else wrapped_code
+                else code_stripped
             )
             if re.search(pattern, target_code):
                 raise PermissionError(

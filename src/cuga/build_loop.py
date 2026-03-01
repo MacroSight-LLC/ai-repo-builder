@@ -27,6 +27,9 @@ Usage (CLI)::
 
 from __future__ import annotations
 
+import contextlib
+import json
+import textwrap
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,6 +43,208 @@ __all__ = [
     "BuildResult",
     "IterationRecord",
 ]
+
+
+# ── Post-iteration file fixups ─────────────────────────────────
+
+_SKIP_DIRS: frozenset[str] = frozenset(
+    {"__pycache__", "node_modules", ".venv", ".git", ".mypy_cache", ".ruff_cache"}
+)
+
+_TEXT_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".py", ".ts", ".tsx", ".js", ".jsx", ".json", ".yaml", ".yml",
+        ".toml", ".cfg", ".ini", ".md", ".txt", ".html", ".css", ".sh",
+        ".env", ".gitignore", ".dockerignore", "",
+    }
+)
+
+
+def _fixup_malformed_files(project_dir: Path) -> None:
+    """Fix common LLM file-writing mistakes after each build iteration.
+
+    Issues fixed:
+    - JSON-wrapped content: ``{"content": "...actual code..."}``
+    - Double JSON-wrapped: ``{"content": "{\"content\": \"...\"}"``
+    - Uniform excess indentation (e.g. every line starts with 4+ spaces)
+
+    Args:
+        project_dir: Root of the generated project to scan.
+    """
+    if not project_dir.exists():
+        return
+
+    fixed_count = 0
+    for fp in sorted(project_dir.rglob("*")):
+        if not fp.is_file():
+            continue
+        if any(p in _SKIP_DIRS for p in fp.relative_to(project_dir).parts):
+            continue
+        if fp.suffix not in _TEXT_EXTENSIONS:
+            continue
+
+        with contextlib.suppress(UnicodeDecodeError, PermissionError):
+            raw = fp.read_text(encoding="utf-8")
+            fixed = _fixup_content(raw)
+            fixed = _try_strip_spurious_indent(fixed, fp.suffix)
+            if fixed != raw:
+                fp.write_text(fixed, encoding="utf-8")
+                fixed_count += 1
+
+    if fixed_count:
+        logger.info("Auto-fixed {} malformed file(s) in {}", fixed_count, project_dir.name)
+
+
+def _fixup_content(raw: str) -> str:
+    """Unwrap JSON encoding and strip excess indentation from file content.
+
+    Args:
+        raw: The raw file content as read from disk.
+
+    Returns:
+        Cleaned content.
+    """
+    content = raw
+
+    # Unwrap up to 3 levels of {"content": "..."} JSON wrapping
+    for _ in range(3):
+        stripped = content.strip()
+        if not stripped.startswith("{"):
+            break
+        try:
+            obj = json.loads(stripped)
+        except (json.JSONDecodeError, ValueError):
+            break
+        if isinstance(obj, dict) and "content" in obj and isinstance(obj["content"], str):
+            content = obj["content"]
+        else:
+            break
+
+    # The JSON content often has escaped newlines — unescape them
+    # (json.loads already handles \\n → \n, but check for literal \\n)
+    if "\\n" in content and "\n" not in content:
+        content = content.replace("\\n", "\n").replace("\\t", "\t")
+        content = content.replace('\\"', '"').replace("\\'", "'")
+
+    # Strip excess leading indentation.
+    # textwrap.dedent works when ALL lines share a common prefix. But the
+    # CodeWrapper often produces a pattern where line 1 has 0-indent and
+    # lines 2+ carry 4-space indent (from the ``async def`` body).  Handle
+    # both cases explicitly.
+    lines = content.split("\n")
+    if len(lines) > 1:
+        # First try standard dedent (handles uniform indent)
+        dedented = textwrap.dedent(content)
+        if dedented != content:
+            content = dedented.strip() + "\n"
+        else:
+            # Mixed-indent: line 1 at col 0, lines 2+ indented.
+            # Only strip if line 1 is NOT a block opener (ends with : { ( )
+            # — those legitimately indent subsequent lines.
+            first_line = lines[0].rstrip()
+            if first_line and first_line[-1] not in (":", "{", "("):
+                tail_indents = []
+                for ln in lines[1:]:
+                    stripped = ln.lstrip(" ")
+                    if stripped:
+                        tail_indents.append(len(ln) - len(stripped))
+                if tail_indents:
+                    min_indent = min(tail_indents)
+                    if min_indent > 0:
+                        fixed = [lines[0]] + [
+                            ln[min_indent:] if len(ln) >= min_indent else ln
+                            for ln in lines[1:]
+                        ]
+                        content = "\n".join(fixed).strip() + "\n"
+
+    return content
+
+
+def _try_strip_spurious_indent(content: str, suffix: str) -> str:
+    """Try to compile Python code and strip 4-space indent if it fixes syntax.
+
+    The CodeWrapper wraps agent code inside ``async def _async_main():``
+    which adds 4-space indent to triple-quoted string literals.  This
+    produces files where some lines are at col 0 (the opening line of the
+    string) and others carry a spurious 4-space offset.
+
+    For ``.py`` files, we can detect this by compiling: if the file has
+    ``SyntaxError`` and removing 4 spaces fixes it, apply the fix.
+
+    Args:
+        content: File content after ``_fixup_content``.
+        suffix: File extension (e.g. ``".py"``).
+
+    Returns:
+        Fixed content (or the original if no fix was needed/possible).
+    """
+    if suffix != ".py":
+        return content
+
+    # Skip if it already compiles cleanly
+    try:
+        compile(content, "<check>", "exec")
+        return content
+    except SyntaxError:
+        pass
+
+    # Try stripping exactly 4 leading spaces from lines that have them
+    lines = content.split("\n")
+    fixed_lines = []
+    for ln in lines:
+        if ln.startswith("    "):
+            fixed_lines.append(ln[4:])
+        else:
+            fixed_lines.append(ln)
+    candidate = "\n".join(fixed_lines)
+
+    try:
+        compile(candidate, "<check>", "exec")
+        return candidate
+    except SyntaxError:
+        return content
+
+
+def _pre_create_directories(project_dir: Path, spec: dict[str, Any]) -> None:
+    """Create all directories from the spec before the agent starts.
+
+    The MCP filesystem server rejects writes when parent directories
+    don't exist (``"Parent directory does not exist"``).  Pre-creating
+    them avoids wasting the first iteration entirely.
+
+    Args:
+        project_dir: Root of the generated project.
+        spec: The project spec dict containing ``structure.files``.
+    """
+    structure = spec.get("structure", spec.get("files", []))
+    files: list[Any] = []
+
+    if isinstance(structure, dict):
+        files = structure.get("files", [])
+    elif isinstance(structure, list):
+        files = structure
+
+    dirs: set[Path] = {project_dir}
+    for f in files:
+        if isinstance(f, str):
+            fpath = f
+        elif isinstance(f, dict):
+            fpath = f.get("path", "")
+        else:
+            continue
+        if fpath:
+            parent = project_dir / Path(fpath).parent
+            dirs.add(parent)
+
+    for d in sorted(dirs):
+        d.mkdir(parents=True, exist_ok=True)
+
+    if len(dirs) > 1:
+        logger.info(
+            "Pre-created {} directories under {}",
+            len(dirs) - 1,
+            project_dir.name,
+        )
 
 
 # ── Configuration ──────────────────────────────────────────────
@@ -289,6 +494,7 @@ def _check_quality_gate(
         max_error_smells=config.max_error_smells,
         require_lint_pass=config.require_lint_pass,
         require_all_spec_files=config.require_all_spec_files,
+        min_files=1,  # Must generate at least 1 file to pass
     )
     verdict = QualityGate(gate_cfg).evaluate(validation)
     return verdict.passed
@@ -372,16 +578,18 @@ def _build_escalation_hint(
     for sig in stuck_errors[:5]:
         hints.append(f"- `{sig}`")
 
-    hints.extend([
-        "",
-        "**Escalation strategies:**",
-        "1. Use **context7** to look up the correct API/syntax for the library causing the error.",
-        "2. Simplify: replace the problematic implementation with a simpler alternative.",
-        "3. Split: break a complex file into smaller, independently testable modules.",
-        "4. If an import fails, check if the package name is correct and add it to dependencies.",
-        "5. If a test fails repeatedly, check if the test assumptions are wrong (not just the code).",
-        "",
-    ])
+    hints.extend(
+        [
+            "",
+            "**Escalation strategies:**",
+            "1. Use **context7** to look up the correct API/syntax for the library causing the error.",
+            "2. Simplify: replace the problematic implementation with a simpler alternative.",
+            "3. Split: break a complex file into smaller, independently testable modules.",
+            "4. If an import fails, check if the package name is correct and add it to dependencies.",
+            "5. If a test fails repeatedly, check if the test assumptions are wrong (not just the code).",
+            "",
+        ]
+    )
     return "\n".join(hints)
 
 
@@ -476,6 +684,10 @@ class BuildLoop:
             workspace_root=self.workspace_root,
         )
 
+        # Pre-create all directories from the spec so the filesystem MCP
+        # server won't reject writes with "Parent directory does not exist".
+        _pre_create_directories(self.project_dir, self.spec)
+
         thread_id: str | None = None
         last_validation: dict[str, Any] = {}
         error_history: dict[str, int] = {}  # error signature → iteration count
@@ -554,6 +766,9 @@ class BuildLoop:
                 continue
 
             iter_elapsed = time.time() - iter_t0
+
+            # ── Fix common LLM file-writing mistakes ───────────
+            _fixup_malformed_files(self.project_dir)
 
             # ── Validate ────────────────────────────────────────
             last_validation = validate_project(self.project_dir, self.spec)

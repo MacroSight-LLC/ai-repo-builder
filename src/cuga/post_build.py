@@ -620,11 +620,13 @@ def validate_imports(project_dir: Path) -> dict[str, object]:
                         pkg_init = mod_path / "__init__.py"
                         mod_file = mod_path.with_suffix(".py")
                         if not mod_file.exists() and not pkg_init.exists():
-                            broken.append({
-                                "file": rel,
-                                "module": alias.name,
-                                "error": "Module file not found in project",
-                            })
+                            broken.append(
+                                {
+                                    "file": rel,
+                                    "module": alias.name,
+                                    "error": "Module file not found in project",
+                                }
+                            )
             elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
                 checked += 1
                 root_mod = node.module.split(".")[0]
@@ -633,11 +635,13 @@ def validate_imports(project_dir: Path) -> dict[str, object]:
                     pkg_init = mod_path / "__init__.py"
                     mod_file = mod_path.with_suffix(".py")
                     if not mod_file.exists() and not pkg_init.exists():
-                        broken.append({
-                            "file": rel,
-                            "module": node.module,
-                            "error": "Module file not found in project",
-                        })
+                        broken.append(
+                            {
+                                "file": rel,
+                                "module": node.module,
+                                "error": "Module file not found in project",
+                            }
+                        )
 
     return {
         "broken_imports": broken,
@@ -664,7 +668,12 @@ def validate_spec_endpoints(project_dir: Path, spec: dict | None) -> dict[str, o
         ``missing_endpoints``, ``coverage_pct``.
     """
     if not spec:
-        return {"declared_endpoints": [], "found_routes": [], "missing_endpoints": [], "coverage_pct": 100}
+        return {
+            "declared_endpoints": [],
+            "found_routes": [],
+            "missing_endpoints": [],
+            "coverage_pct": 100,
+        }
 
     # Extract declared endpoints from spec features
     declared: list[str] = []
@@ -674,11 +683,24 @@ def validate_spec_endpoints(project_dir: Path, spec: dict | None) -> dict[str, o
             for ep in endpoints:
                 # Parse "GET /api/v1/items - List all items" → "/api/v1/items"
                 parts = str(ep).split()
-                if len(parts) >= 2 and parts[0].upper() in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}:
+                if len(parts) >= 2 and parts[0].upper() in {
+                    "GET",
+                    "POST",
+                    "PUT",
+                    "PATCH",
+                    "DELETE",
+                    "HEAD",
+                    "OPTIONS",
+                }:
                     declared.append(parts[1].rstrip("/"))
 
     if not declared:
-        return {"declared_endpoints": [], "found_routes": [], "missing_endpoints": [], "coverage_pct": 100}
+        return {
+            "declared_endpoints": [],
+            "found_routes": [],
+            "missing_endpoints": [],
+            "coverage_pct": 100,
+        }
 
     # Scan code for route definitions
     found_routes: set[str] = set()
@@ -829,6 +851,19 @@ def validate_project(project_dir: Path, spec: dict | None = None) -> dict:
         missing_required, missing_recommended, summary.
     """
     if not project_dir.exists():
+        # Populate missing_spec_files from spec so the gate knows ALL files are missing
+        all_spec_files: list[str] = []
+        if spec:
+            structure = spec.get("structure", {})
+            if isinstance(structure, dict):
+                raw = structure.get("files") or []
+                all_spec_files = [
+                    f.get("path", "") if isinstance(f, dict) else str(f)
+                    for f in raw
+                ]
+            elif isinstance(structure, list):
+                all_spec_files = list(structure)
+
         return {
             "passed": False,
             "files_total": 0,
@@ -837,8 +872,8 @@ def validate_project(project_dir: Path, spec: dict | None = None) -> dict:
             "lint_passed": False,
             "lint_output": "Project directory does not exist",
             "smells": [],
-            "missing_spec_files": [],
-            "missing_required": [],
+            "missing_spec_files": all_spec_files,
+            "missing_required": list(REQUIRED_FILES),
             "missing_recommended": [],
             "summary": f"❌ Project directory not found: {project_dir}",
         }
@@ -979,8 +1014,7 @@ def validate_project(project_dir: Path, spec: dict | None = None) -> dict:
             lines.append(f"      - {ep}")
     elif endpoint_report.get("declared_endpoints"):
         lines.append(
-            f"   ✅ Endpoints: {len(endpoint_report['declared_endpoints'])} "
-            f"spec endpoints verified"
+            f"   ✅ Endpoints: {len(endpoint_report['declared_endpoints'])} spec endpoints verified"
         )
 
     summary = "\n".join(lines)

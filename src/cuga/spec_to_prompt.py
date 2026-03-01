@@ -148,8 +148,20 @@ def spec_to_prompt(
         if files:
             parts.append("\n## Files to Create")
             parts.append(
-                "Create EVERY file below. Each file MUST contain "
-                "the described contents — no stubs or placeholders.\n"
+                "Create EVERY file below **plus any additional files** needed for "
+                "a complete application (models, middleware, auth utilities, "
+                "components, config, etc.).\n"
+                "\nCRITICAL: The `key_contents` listed below are **minimum "
+                "starting hints only**. Each file MUST be a **complete, "
+                "production-ready implementation** that:\n"
+                "- Fully implements ALL features, endpoints, and data models "
+                "described in the spec sections below\n"
+                "- Includes proper imports, type hints, error handling, and "
+                "docstrings\n"
+                "- Contains real working logic — never stubs, TODOs, or "
+                "placeholder comments\n"
+                "- Integrates with other files (e.g., models used by routes, "
+                "routes imported by app)\n"
             )
             for f in files:
                 if isinstance(f, str):
@@ -161,7 +173,9 @@ def spec_to_prompt(
                 parts.append(f"### `{name}/{fpath}`")
                 parts.append(f"Purpose: {purpose}")
                 if contents:
-                    parts.append("Must contain:")
+                    parts.append(
+                        "Minimum elements (expand into full implementation):"
+                    )
                     for c in contents:
                         parts.append(f"  - {c}")
                 parts.append("")
@@ -235,9 +249,7 @@ def spec_to_prompt(
                 parts.append("Props interface:")
                 for p in props:
                     req = "required" if p.get("required", True) else "optional"
-                    parts.append(
-                        f"  - {p.get('name', '?')}: {p.get('type', 'unknown')} ({req})"
-                    )
+                    parts.append(f"  - {p.get('name', '?')}: {p.get('type', 'unknown')} ({req})")
             state = comp.get("state", [])
             if state:
                 parts.append(f"Local state: {', '.join(state)}")
@@ -363,9 +375,7 @@ def spec_to_prompt(
         if docker:
             parts.append("\n## Docker Configuration")
             parts.append(f"- Multi-stage build: {docker.get('multi_stage', True)}")
-            parts.append(
-                f"- Base image: {docker.get('base_image', 'python:3.11-slim')}"
-            )
+            parts.append(f"- Base image: {docker.get('base_image', 'python:3.11-slim')}")
             services = docker.get("compose_services", [])
             if services:
                 parts.append("- Compose services:")
@@ -377,9 +387,7 @@ def spec_to_prompt(
 
         ci = deployment.get("ci_cd", {})
         if ci:
-            parts.append(
-                f"\n## CI/CD Pipeline ({ci.get('provider', 'github-actions')})"
-            )
+            parts.append(f"\n## CI/CD Pipeline ({ci.get('provider', 'github-actions')})")
             for step in ci.get("pipeline", []):
                 parts.append(f"  - {step}")
 
@@ -428,9 +436,7 @@ def spec_to_prompt(
 
         git = standards.get("git", {})
         if git:
-            parts.append(
-                f"- Commit convention: {git.get('commit_convention', 'conventional')}"
-            )
+            parts.append(f"- Commit convention: {git.get('commit_convention', 'conventional')}")
             if git.get("pre_commit_hooks"):
                 parts.append("- Pre-commit hooks: enabled")
 
@@ -492,6 +498,15 @@ Follow this workflow to build a production-grade project:
    - `cd {ws}/{name} && pip install -e ".[dev]"` (Python)
    - `cd {ws}/{name} && npm install` (Node/Frontend)
 7. Write files ONE AT A TIME using **filesystem** in this exact order:
+
+   ⚠️ BEFORE writing any file, create its parent directory:
+   ```python
+   await filesystem_create_directory(path="{ws}/{name}/backend/routers")
+   ```
+   The filesystem server rejects writes if the parent directory does not exist.
+   Create directories for EVERY subfolder (backend/, backend/routers/, frontend/app/, etc.)
+   before writing files into them.
+
    a. `.gitignore` — ALWAYS first (prevents committing junk).
       Must include: `__pycache__/`, `*.pyc`, `.env`, `.venv/`, `node_modules/`,
       `.ruff_cache/`, `.mypy_cache/`, `.pytest_cache/`, `*.egg-info/`,
@@ -505,8 +520,24 @@ Follow this workflow to build a production-grade project:
    h. Tests
    i. Docker / CI/CD files
    j. README.md
-   Use this pattern for each file:
-       result = await filesystem_write_file(path="{ws}/{name}/<filepath>", content="...")
+
+   ⚠️ CRITICAL: File content rules:
+   - The `content` parameter must be the RAW source code — NOT JSON-encoded.
+   - WRONG: content='{{"content": "from fastapi import FastAPI\\n..."}}'
+   - WRONG: content=json.dumps({{"content": code}})
+   - RIGHT:  content="from fastapi import FastAPI\\n\\napp = FastAPI()\\n..."
+   - Do NOT add leading indentation (4 spaces) to file content — write code
+     exactly as it should appear in the file (no extra leading whitespace).
+   - Use \\n for newlines within the content string, not actual Python indentation.
+
+   Example of a correct filesystem call:
+   ```python
+   result = await filesystem_write_file(
+       path="{ws}/{name}/backend/main.py",
+       content="from fastapi import FastAPI\\nfrom fastapi.middleware.cors import CORSMiddleware\\n\\napp = FastAPI(title=\\"{name}\\", version=\\"0.1.0\\")\\n\\n@app.get(\\"/\\")\\nasync def root():\\n    return {{\\"status\\": \\"ok\\"}}\\n"
+   )
+   ```
+
 8. Before writing each file, use **memory** to recall relevant decisions.
 
 IMPORTANT: Every shell command MUST cd into the project directory first:
@@ -598,9 +629,7 @@ Never run commands from the workspace root — always cd into {ws}/{name}.
 """)
 
     # ── Phase 5: GitHub (conditional) ──────────────────────────
-    _gh_owner = (
-        github.get("owner") or os.environ.get("GITHUB_OWNER", "") if github else ""
-    )
+    _gh_owner = github.get("owner") or os.environ.get("GITHUB_OWNER", "") if github else ""
     _gh_vis = github.get("visibility", "private") if github else "private"
     _gh_create = github.get("create_repo", False) if github else False
     _gh_push = github.get("push_to", "") if github else ""
@@ -651,7 +680,15 @@ Never run commands from the workspace root — always cd into {ws}/{name}.
     parts.append(f"""
 ## CRITICAL RULES
 1. Create EVERY file listed in the structure section — do not skip any.
-2. Every file must be complete, production-ready code — never stubs or TODO placeholders.
+   Also create additional files needed for a complete app (models, middleware,
+   auth utilities, services, components, tests) even if not explicitly listed.
+2. Every file must be **complete, production-ready code** — NEVER stubs, TODOs,
+   one-liners, or placeholder comments. The `key_contents` in the spec are
+   MINIMUM STARTING HINTS — you must expand each file into a full implementation
+   with all imports, types, logic, error handling, and docstrings.
+   For example, if key_contents says `from fastapi import FastAPI; app = FastAPI()`,
+   the file MUST include all routes, middleware, CORS config, exception handlers,
+   lifespan hooks, etc. — not just those two lines.
 3. The filesystem workspace root is {ws} — write ALL files under:
        {ws}/{name}/<filepath>
 4. CRITICAL: Call tools DIRECTLY with await — NEVER use asyncio.to_thread,
@@ -661,6 +698,8 @@ Never run commands from the workspace root — always cd into {ws}/{name}.
 7. Use memory to persist decisions — so file 28 is consistent with file 1.
 8. Always run linting and tests after writing code — fix errors before moving on.
 9. When done, provide a summary of all files created and test results.
+10. MINIMUM file sizes: config files ≥ 10 lines, source files ≥ 30 lines,
+    main entry points ≥ 50 lines. If a file is shorter, you are writing stubs.
 """)
 
     # ── Coding policy ─────────────────────────────────────────

@@ -655,25 +655,33 @@ class TestParseArgs:
         assert args.private is True
 
 
-# ── generate.py _print_build_success tests ─────────────────────
+# ── generate.py _print_build_result tests ──────────────────────
 
 
-class TestPrintBuildSuccess:
+class TestPrintBuildResult:
     def test_prints_github_url(self, capsys):
-        from cuga.generate import _print_build_success
+        from cuga.generate import _print_build_result
 
         spec = {"name": "my-app", "github": {"create_repo": True, "owner": "org"}}
-        _print_build_success(spec, "output")
+        _print_build_result(spec, "output", passed=True)
         captured = capsys.readouterr()
         assert "https://github.com/org/my-app" in captured.out
 
     def test_prints_local_path(self, capsys):
-        from cuga.generate import _print_build_success
+        from cuga.generate import _print_build_result
 
         spec = {"name": "my-app"}
-        _print_build_success(spec, "output")
+        _print_build_result(spec, "output", passed=True)
         captured = capsys.readouterr()
         assert "output/my-app/" in captured.out
+
+    def test_prints_warning_on_failure(self, capsys):
+        from cuga.generate import _print_build_result
+
+        spec = {"name": "my-app"}
+        _print_build_result(spec, "output", passed=False)
+        captured = capsys.readouterr()
+        assert "Build completed with issues" in captured.out
 
 
 # ── main._spec_to_prompt backward compat ──────────────────────
