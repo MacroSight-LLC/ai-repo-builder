@@ -578,6 +578,7 @@ async def _cli_main(argv: list[str] | None = None) -> None:
     from cuga.mcp_bootstrap import bootstrap_mcp
     from cuga.mcp_resilience import wrap_tools_with_retry
     from cuga.sdk import CugaAgent
+    from cuga.supervisor_strategy import create_build_supervisor, is_supervisor_enabled
 
     mcp_result = await bootstrap_mcp(
         mcp_servers_path=args.tools,
@@ -587,7 +588,11 @@ async def _cli_main(argv: list[str] | None = None) -> None:
     wrap_tools_with_retry(mcp_result.tools, max_retries=2)
     logger.info("Loaded {} tools", len(mcp_result.tools))
 
-    agent = CugaAgent(tools=mcp_result.tools)
+    if is_supervisor_enabled():
+        logger.info("Supervisor mode enabled — creating multi-agent build supervisor")
+        agent = create_build_supervisor(tools=mcp_result.tools)
+    else:
+        agent = CugaAgent(tools=mcp_result.tools)
 
     # ── Run the loop ────────────────────────────────────────────
     loop_config = BuildLoopConfig(

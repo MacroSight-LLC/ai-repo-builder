@@ -72,15 +72,32 @@ for key, value in os.environ.items():
         new_key = key[3:]
         os.environ[new_key] = value
 
-app_mapping = {
-    urlparse(os.getenv("WA_REDDIT")).netloc: "reddit",
-    urlparse(os.getenv("WA_SHOPPING")).netloc: "shopping",
-    urlparse(os.getenv("WA_SHOPPING_ADMIN")).netloc: "shopping_admin",
-    urlparse(os.getenv("WA_GITLAB")).netloc: "gitlab",
-    urlparse(os.getenv("WA_WIKIPEDIA")).netloc: "wikipedia",
-    urlparse(os.getenv("WA_MAP")).netloc: "map",
-    urlparse(os.getenv("WA_HOMEPAGE")).netloc: "homepage",
-}
+def _build_app_mapping() -> dict[str, str]:
+    """Build URL→app-name mapping from WA_* environment variables.
+
+    Returns an empty mapping entry when an env var is unset, so the
+    module never crashes on startup even without WA_* configuration.
+    """
+    _names = {
+        "WA_REDDIT": "reddit",
+        "WA_SHOPPING": "shopping",
+        "WA_SHOPPING_ADMIN": "shopping_admin",
+        "WA_GITLAB": "gitlab",
+        "WA_WIKIPEDIA": "wikipedia",
+        "WA_MAP": "map",
+        "WA_HOMEPAGE": "homepage",
+    }
+    mapping: dict[str, str] = {}
+    for env_key, app_name in _names.items():
+        raw = os.getenv(env_key)
+        if raw:
+            netloc = urlparse(raw).netloc
+            if netloc:
+                mapping[netloc] = app_name
+    return mapping
+
+
+app_mapping = _build_app_mapping()
 
 
 # Load your settings

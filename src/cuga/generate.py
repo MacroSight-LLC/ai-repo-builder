@@ -344,6 +344,8 @@ async def build_project(
         config=loop_config,
         policy_text=policy_text,
         workspace_root=workspace_root,
+        mcp_manager=_mcp.manager,
+        mcp_registry=_mcp.registry,
     )
 
     t0 = time.time()

@@ -1323,7 +1323,45 @@ async def build_history(
     return JSONResponse(list(reversed(records[-50:])))
 
 
-@app.get("/api/auth/config")
+@app.post("/api/quality-gate")
+async def quality_gate(
+    request: Request,
+    current_user: UserInfo | None = Depends(require_auth),
+):
+    """Evaluate a validation report against quality gate thresholds.
+
+    Body JSON: {
+        "validation": {...},  # from POST /api/validate-build
+        "stack": "python",    # optional — for per-stack overrides
+        "config": {...}       # optional — GateConfig overrides
+    }
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    validation = body.get("validation")
+    if not validation or not isinstance(validation, dict):
+        return JSONResponse(
+            {"error": "validation dict is required"},
+            status_code=400,
+        )
+
+    from dataclasses import asdict
+
+    from cuga.quality_gate import GateConfig, QualityGate
+
+    gate_overrides = body.get("config", {})
+    try:
+        gate_config = GateConfig(**gate_overrides) if gate_overrides else GateConfig()
+    except (TypeError, ValueError) as exc:
+        return JSONResponse({"error": f"Invalid config: {exc}"}, status_code=400)
+
+    gate = QualityGate(config=gate_config)
+    verdict = gate.evaluate(validation, stack=body.get("stack"))
+
+    return JSONResponse(asdict(verdict))
 async def auth_config():
     return JSONResponse({"enabled": _auth_enabled()})
 
