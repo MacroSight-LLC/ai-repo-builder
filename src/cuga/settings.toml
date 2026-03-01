@@ -100,19 +100,19 @@ ssl_keyfile = ""
 ssl_certfile = ""
 
 [server_ports]
-registry = 8001
-# registry_host = "http://localhost:8001"  # Optional: Full registry URL. Falls back to "http://localhost:{registry}"
-function_call_host = ""  # Optional: URL for E2B to call functions. Falls back to registry_host, then "http://localhost:8001"
+registry = 8010
+# registry_host = "http://localhost:8010"  # Optional: Full registry URL. Falls back to "http://localhost:{registry}"
+function_call_host = ""  # Optional: URL for E2B to call functions. Falls back to registry_host, then "http://localhost:8010"
 demo = 7860
 apis_url = 9000
 crm_api = 8007
-saved_flows = 8003
+saved_flows = 8011
 environment_url = 8000
 filesystem_mcp = 8112
 digital_sales_api = 8000
 mcp_server = 8000
 petstore_api = 8081
-graph_visualization = 8080
+graph_visualization = 8012
 orchestrate_url = 4321
-trm_url = 8080
+trm_url = 8013
 memory = 8888

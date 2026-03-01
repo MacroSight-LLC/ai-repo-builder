@@ -16,7 +16,7 @@ Building a domain-specific enterprise agent from scratch is complex and requires
 
 [![🦉🤗 Try CUGA Live on Hugging Face Spaces](https://img.shields.io/badge/🦉🤗_Try_CUGA_Live_on_Hugging_Face_Spaces-FFD21E?style=for-the-badge)](https://huggingface.co/spaces/ibm-research/cuga-agent)
 
-[![Python](https://shields.io/badge/Python-3.12-blue?logo=python&style=for-the-badge)](https://www.python.org/)
+[![Python](https://shields.io/badge/Python-3.10+-blue?logo=python&style=for-the-badge)](https://www.python.org/)
 [![CugaAgent SDK](https://shields.io/badge/CugaAgent_SDK-Documentation-blue?logo=python&style=for-the-badge)](https://docs.cuga.dev/docs/sdk/cuga_agent/)
 [![Status](https://shields.io/badge/Status-Active-success?logo=checkmarx&style=for-the-badge)]()
 [![Documentation](https://shields.io/badge/Documentation-Available-blue?logo=gitbook&style=for-the-badge)](https://docs.cuga.dev)
@@ -171,8 +171,10 @@ Experience CUGA's Human-in-the-Loop capabilities where the agent pauses for huma
 <details>
 <summary><em style="color: #666;">📋 Prerequisites (click to expand)</em></summary>
 
-- **Python 3.12+** - [Download here](https://www.python.org/downloads/)
+- **Python 3.10+** (3.12 recommended) - [Download here](https://www.python.org/downloads/)
+- **Node.js 18+** - Required for MCP tool servers - [Download here](https://nodejs.org/)
 - **uv package manager** - [Installation guide](https://docs.astral.sh/uv/getting-started/installation/)
+- **Docker** (optional) - For database features - [Download here](https://www.docker.com/products/docker-desktop/)
 
 </details>
 
@@ -188,8 +190,9 @@ uv venv --python=3.12 && source .venv/bin/activate
 uv sync
 
 # 3. Set up environment variables
-# Create .env file with your API keys
-echo "OPENAI_API_KEY=your-openai-api-key-here" > .env
+# Copy the example and fill in your API key for at least one provider:
+cp .env.example .env
+# Then edit .env — set ONE of: OPENAI_API_KEY, WATSONX_API_KEY, or GROQ_API_KEY
 
 # 4. Start the demo
 cuga start demo_crm --read-only
@@ -863,8 +866,8 @@ CUGA supports three types of tool integrations. Each approach has its own use ca
 ## 📚 **Additional Resources**
 
 - **Tool Registry**: [./src/cuga/backend/tools_env/registry/README.md](./src/cuga/backend/tools_env/registry/README.md)
-- **Comprehensive example with different tools + MCP**: [./docs/examples/cuga_with_runtime_tools/README.md](Adding Tools)
-- **CUGA as MCP**: [./docs/examples/cuga_as_mcp/README.md](docs/examples/cuga_as_mcp)
+- **Comprehensive example with different tools + MCP**: [Adding Tools](./docs/examples/cuga_with_runtime_tools/README.md)
+- **CUGA as MCP**: [CUGA as MCP](./docs/examples/cuga_as_mcp/README.md)
 
 </details>
 

@@ -115,20 +115,33 @@ class TestGetSession:
     """Tests for the _get_session helper."""
 
     def test_registry_based_manager(self) -> None:
-        """Session found via _servers dict."""
+        """Session found via mcp_transports dict (registry MCPManager)."""
+        fake_session = MagicMock(name="session")
+        transport_obj = MagicMock()
+        transport_obj.session = fake_session
+        manager = MagicMock()
+        manager.mcp_transports = {"fs": transport_obj}
+        manager.servers = {}
+        manager._clients = {}
+        assert _get_session(manager, "fs") is fake_session
+
+    def test_servers_dict(self) -> None:
+        """Session found via public .servers dict."""
         fake_session = MagicMock(name="session")
         server_obj = MagicMock()
         server_obj.session = fake_session
         manager = MagicMock()
-        manager._servers = {"fs": server_obj}
+        manager.mcp_transports = {}
+        manager.servers = {"api": server_obj}
         manager._clients = {}
-        assert _get_session(manager, "fs") is fake_session
+        assert _get_session(manager, "api") is fake_session
 
     def test_standalone_manager_dict(self) -> None:
         """Session found via _clients dict with dict values."""
         fake_session = MagicMock(name="session")
         manager = MagicMock()
-        manager._servers = {}
+        manager.mcp_transports = {}
+        manager.servers = {}
         manager._clients = {"git": {"session": fake_session}}
         assert _get_session(manager, "git") is fake_session
 
@@ -138,28 +151,32 @@ class TestGetSession:
         client_obj = MagicMock()
         client_obj.session = fake_session
         manager = MagicMock()
-        manager._servers = {}
+        manager.mcp_transports = {}
+        manager.servers = {}
         manager._clients = {"git": client_obj}
         assert _get_session(manager, "git") is fake_session
 
     def test_not_found(self) -> None:
         manager = MagicMock()
-        manager._servers = {}
+        manager.mcp_transports = {}
+        manager.servers = {}
         manager._clients = {}
         assert _get_session(manager, "missing") is None
 
     def test_no_dicts_at_all(self) -> None:
-        """Manager without _servers or _clients attrs."""
+        """Manager without mcp_transports, servers, or _clients attrs."""
         manager = object()  # bare object, no attributes
         assert _get_session(manager, "anything") is None
 
-    def test_registry_server_no_session_attr(self) -> None:
-        """Server object exists but has no session attribute."""
-        server_obj = MagicMock(spec=[])  # no attributes at all
+    def test_transport_returns_itself_when_no_session(self) -> None:
+        """Transport object without session attr returns the transport itself."""
+        transport_obj = MagicMock(spec=[])  # no attributes at all
         manager = MagicMock()
-        manager._servers = {"fs": server_obj}
+        manager.mcp_transports = {"fs": transport_obj}
+        manager.servers = {}
         manager._clients = {}
-        assert _get_session(manager, "fs") is None
+        # Transport is returned as fallback for health pinging
+        assert _get_session(manager, "fs") is transport_obj
 
 
 # ── health_check_servers tests ─────────────────────────────────

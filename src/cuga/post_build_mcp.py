@@ -336,6 +336,13 @@ async def _github_verify(
         )
         output = _extract_text(result)
 
+        if "error" in output.lower() or "not found" in output.lower():
+            return StepResult(
+                name="github_verify",
+                success=False,
+                message=f"GitHub repo not found: {owner}/{repo_name}",
+            )
+
         return StepResult(
             name="github_verify",
             success=True,
@@ -430,12 +437,14 @@ async def _devops_pipeline(
                 "repo_url": repo_url,
             },
         )
+        pipe_data = json.loads(_extract_text(pipe_result))
+        pipe_id = pipe_data.get("id", "")
 
         return StepResult(
             name="devops_pipeline",
             success=True,
             message=f"Pipeline created in toolchain {tc_id}",
-            data={"toolchain_id": tc_id, "repo_url": repo_url},
+            data={"toolchain_id": tc_id, "pipeline_id": pipe_id, "repo_url": repo_url},
         )
     except Exception as exc:
         return StepResult(

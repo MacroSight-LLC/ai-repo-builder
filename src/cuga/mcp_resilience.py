@@ -173,7 +173,7 @@ async def health_check_servers(
 def _get_session(manager: Any, server_name: str) -> Any | None:
     """Extract the MCP client session for a named server.
 
-    Handles both the registry-based MCPManager (tools_by_server)
+    Handles both the registry-based MCPManager (mcp_transports)
     and the standalone MCPManager (_clients).
 
     Args:
@@ -183,11 +183,21 @@ def _get_session(manager: Any, server_name: str) -> Any | None:
     Returns:
         The client session, or None if not found.
     """
-    # Registry-based MCPManager stores sessions in _servers dict
-    servers_dict = getattr(manager, "_servers", {})
+    # Registry-based MCPManager stores transports in mcp_transports dict
+    transports = getattr(manager, "mcp_transports", {})
+    if server_name in transports:
+        transport = transports[server_name]
+        # Transport objects may expose a session
+        session = getattr(transport, "session", None)
+        if session is not None:
+            return session
+        # The transport itself can be used for health pinging
+        return transport
+
+    # Also check the public .servers dict (OpenAPI-based servers)
+    servers_dict = getattr(manager, "servers", {})
     if server_name in servers_dict:
         server_obj = servers_dict[server_name]
-        # The server object may store session differently
         session = getattr(server_obj, "session", None)
         if session is not None:
             return session

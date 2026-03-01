@@ -13,7 +13,7 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src/ ./src/
 COPY docs/ ./docs/
 
-RUN uv sync --no-editable
+RUN uv sync --no-editable --no-dev
 
 COPY docs/examples/huggingface/contacts.txt /app/cuga_workspace/contacts.txt
 COPY docs/examples/huggingface/cuga_knowledge.md /app/cuga_workspace/cuga_knowledge.md

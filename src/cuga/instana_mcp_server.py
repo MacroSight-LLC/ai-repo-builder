@@ -194,7 +194,6 @@ async def get_application_metrics(
     import time
 
     now_ms = int(time.time() * 1000)
-    from_ms = now_ms - (window_seconds * 1000)
 
     metric_map = {
         "latency": "latency.mean",

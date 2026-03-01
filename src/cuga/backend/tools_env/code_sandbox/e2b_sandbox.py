@@ -8,9 +8,9 @@ Accepts pre-wrapped code from sandbox.py to maintain consistency across executio
 import ast
 import asyncio
 import time
-from typing import Any, Dict
-from langfuse import observe, get_client
+from typing import Any
 
+from langfuse import get_client, observe
 from loguru import logger
 
 from cuga.config import settings
@@ -84,7 +84,7 @@ class E2BSandboxCache:
     """
 
     _instance = None
-    _sandboxes: Dict[str, SandboxCacheEntry] = {}
+    _sandboxes: dict[str, SandboxCacheEntry] = {}
     _idle_ttl: int = 600  # Idle timeout
     _max_age: int = 86400  # Max age for single mode
     _ttl_buffer: int = 60  # Safety buffer
@@ -306,10 +306,7 @@ class E2BSandboxCache:
 
         for thread_id, entry in list(self._sandboxes.items()):
             # All checks are LOCAL
-            if entry.is_expired_idle(self._idle_ttl):
-                threads_to_remove.append(thread_id)
-                expired_count += 1
-            elif self._mode == "single" and entry.is_expired_age(self._max_age):
+            if entry.is_expired_idle(self._idle_ttl) or (self._mode == "single" and entry.is_expired_age(self._max_age)):
                 threads_to_remove.append(thread_id)
                 expired_count += 1
 
@@ -388,7 +385,7 @@ class E2BSandboxCache:
 
         return any(indicator in error_str for indicator in stale_indicators)
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get cache statistics."""
         stats = {
             "total_sandboxes": len(self._sandboxes),
@@ -503,7 +500,7 @@ async def execute_in_e2b_sandbox_lite(
 
         # Add simple variables to variables code
         if simple_vars:
-            vars_code_from_locals = "\n".join([f"{k} = {repr(v)}" for k, v in simple_vars.items()])
+            vars_code_from_locals = "\n".join([f"{k} = {v!r}" for k, v in simple_vars.items()])
             variables_code = (
                 variables_code + "\n" + vars_code_from_locals if variables_code else vars_code_from_locals
             )
@@ -614,15 +611,19 @@ async def {tool_name}(**kwargs):
         if not function_call_url:
             function_call_url = getattr(settings.server_ports, "registry_host", None)
         if not function_call_url:
+            registry_port = getattr(
+                getattr(settings, "server_ports", None), "registry", 8010
+            )
             logger.error(
                 "E2B sandbox (lite mode) requires a publicly accessible URL. "
                 "Please set 'function_call_host' or 'registry_host' in settings.toml."
             )
-            function_call_url = "http://localhost:8001"
+            function_call_url = f"http://localhost:{registry_port}"
 
         # Get trajectory path for call_api
-        from cuga.backend.activity_tracker.tracker import ActivityTracker
         from urllib.parse import quote
+
+        from cuga.backend.activity_tracker.tracker import ActivityTracker
 
         tracker = ActivityTracker()
         trajectory_path = quote(tracker.get_current_trajectory_path())

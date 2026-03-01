@@ -11,10 +11,24 @@ set -e
 #
 # The real work happens in `python -m cuga.build_loop` which runs an
 # in-process build→validate→feedback→retry loop (Smart Ralph).
+#
+# MCP servers run locally via stdio transport (npx spawns them on
+# demand).  Only databases need Docker.
 # ──────────────────────────────────────────────────────────────────
 
-# Clear any stale shell env vars that conflict with .env
-unset OPENAI_API_KEY OPENAI_BASE_URL MODEL_NAME AGENT_SETTING_CONFIG IBMCLOUD_API_KEY WATSONX_API_KEY WATSONX_APIKEY WATSONX_PROJECT_ID WATSONX_URL 2>/dev/null || true
+WORKSPACE="$(cd "$(dirname "$0")" && pwd)"
+cd "$WORKSPACE"
+
+# ── Load .env ──────────────────────────────────────────────────
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+  echo "✅ Loaded .env"
+else
+  echo "⚠️  No .env found — using existing environment"
+fi
 
 # ── Prerequisite checks ────────────────────────────────────────
 # Node.js 18+ is required for MCP servers (npx)
@@ -39,61 +53,58 @@ else
     exit 1
 fi
 
+# Check at least one LLM provider
+HAS_LLM=false
+[ -n "${WATSONX_API_KEY:-}" ] && [ -n "${WATSONX_PROJECT_ID:-}" ] && HAS_LLM=true
+[ -n "${OPENAI_API_KEY:-}" ] && HAS_LLM=true
+[ -n "${GROQ_API_KEY:-}" ] && HAS_LLM=true
+if [ "$HAS_LLM" = false ]; then
+  echo "❌ No LLM provider configured. Set one in .env:"
+  echo "   WATSONX_API_KEY + WATSONX_PROJECT_ID | OPENAI_API_KEY | GROQ_API_KEY"
+  exit 1
+fi
+echo "✅ LLM credentials configured"
+
+# Activate venv if present
+if [ -d .venv ]; then
+  # shellcheck disable=SC1091
+  source .venv/bin/activate
+  echo "✅ Virtual environment activated"
+fi
+
 SPEC=${1:-"specs/example-spec.yaml"}
 MAX_ITERS=${MAX_ITERATIONS:-5}
-WORKSPACE=$(pwd)
 
+echo ""
 echo "🚀 Starting ai-repo-builder (Smart Ralph loop)"
 echo "📋 Spec: $SPEC"
 echo "🔁 Max iterations: $MAX_ITERS"
 
-# Start MCP containers (only the ones with valid images)
-MCP_SERVICES="context7-mcp filesystem-mcp github-mcp langfuse-db"
-echo "🐳 Starting MCP services: $MCP_SERVICES"
-docker compose up -d $MCP_SERVICES 2>/dev/null || echo "⚠️  Docker Compose not available — using local MCP servers"
-echo "✅ MCP containers started"
+# ── Start backing services (databases only) ────────────────────
+if command -v docker &>/dev/null; then
+  echo "🐳 Starting backing services..."
+  docker compose -f "$WORKSPACE/docker-compose.yml" up -d \
+    postgres-dev redis-dev langfuse-db 2>/dev/null && \
+    echo "✅ Database containers started" || \
+    echo "⚠️  Docker Compose unavailable — database features may not work"
 
-# Wait for health endpoints
-echo "⏳ Waiting for MCP servers to be ready..."
-for endpoint in "http://localhost:8004/healthz" "http://localhost:8007/healthz"; do
-  for attempt in $(seq 1 30); do
-    if curl -sf "$endpoint" > /dev/null 2>&1; then
-      break
-    fi
-    sleep 1
-  done
-done
-echo "✅ MCP servers ready"
+  # Wait for Postgres
+  timeout 30 bash -c 'until docker compose exec -T postgres-dev pg_isready -U cuga 2>/dev/null; do sleep 1; done' \
+    && echo "✅ PostgreSQL ready" \
+    || echo "⚠️  PostgreSQL not ready (non-blocking)"
+else
+  echo "⚠️  Docker not installed — database features won't work"
+fi
 
-# Use localhost URLs for local execution (containers expose ports to host)
+# ── Configure paths ────────────────────────────────────────────
 export MCP_SERVERS_FILE="$WORKSPACE/mcp_servers_local.yaml"
 export SETTINGS_TOML_PATH="$WORKSPACE/src/cuga/settings.toml"
-export PYTHONPATH="$WORKSPACE/src"
+export PYTHONPATH="$WORKSPACE/src:${PYTHONPATH:-}"
+export GITHUB_PERSONAL_ACCESS_TOKEN="${GITHUB_TOKEN:-}"
 
-# Generate local MCP config pointing to localhost instead of container names
-cat > "$WORKSPACE/mcp_servers_local.yaml" << 'EOF'
-mcpServers:
-  github:
-    url: http://localhost:8003
-    transport: http
-    description: GitHub - repos, PRs, issues, branches, commits
-
-  context7:
-    url: http://localhost:8004/sse
-    transport: sse
-    description: Context7 - accurate library docs, anti-hallucination
-
-  filesystem:
-    url: http://localhost:8007/sse
-    transport: sse
-    description: Filesystem - read, write, search files in workspace
-EOF
+mkdir -p "$WORKSPACE/output"
 
 # ── Run the Python build loop ──────────────────────────────────
-# This replaces the old bash for-loop that cold-restarted the agent.
-# The Python loop keeps the agent warm and feeds validation errors
-# back as context for self-correction.
-
 LOOP_ARGS=(
     --spec "$SPEC"
     --tools "$MCP_SERVERS_FILE"
@@ -110,24 +121,28 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 python -m cuga.build_loop "${LOOP_ARGS[@]}"
 BUILD_EXIT=$?
 
-# Cleanup temp config
-rm -f "$WORKSPACE/mcp_servers_local.yaml"
-
 if [ "$BUILD_EXIT" -eq 0 ]; then
     echo ""
-    echo "🎉 Build complete! Creating PR..."
+    echo "════════════════════════════════════════"
+    echo "  ✅ Build complete! Check output/"
+    echo "════════════════════════════════════════"
 
-    # Commit and push
-    git add -A
-    git commit -m "feat: AI-built repo via Smart Ralph loop" --allow-empty
-
-    gh pr create \
-        --title "feat: AI-built repo (Smart Ralph)" \
-        --body "Autonomously built by ai-repo-builder using CUGA + Smart Ralph build loop" \
-        --base main \
-        --head "$(git branch --show-current)" 2>/dev/null || \
-        echo "ℹ️  Skipped PR creation (gh CLI not available or already on main)"
+    # Optionally commit + PR (only on feature branches with gh CLI)
+    CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
+    if [ "$CURRENT_BRANCH" != "main" ] && command -v gh &>/dev/null; then
+        git add -A
+        git commit -m "feat: AI-built repo via Smart Ralph loop" --allow-empty
+        gh pr create \
+            --title "feat: AI-built repo (Smart Ralph)" \
+            --body "Autonomously built by ai-repo-builder" \
+            --base main \
+            --head "$CURRENT_BRANCH" 2>/dev/null || \
+            echo "ℹ️  PR creation skipped (already exists or gh not configured)"
+    fi
 else
-    echo "❌ Build loop failed"
+    echo ""
+    echo "════════════════════════════════════════"
+    echo "  ❌ Build loop failed (exit: $BUILD_EXIT)"
+    echo "════════════════════════════════════════"
     exit 1
 fi

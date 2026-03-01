@@ -26,15 +26,15 @@ if command -v python3 &>/dev/null; then
     PY_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
     PY_MAJOR=$(echo "$PY_VERSION" | cut -d. -f1)
     PY_MINOR=$(echo "$PY_VERSION" | cut -d. -f2)
-    if [ "$PY_MAJOR" -ge 3 ] && [ "$PY_MINOR" -ge 11 ]; then
+    if [ "$PY_MAJOR" -ge 3 ] && [ "$PY_MINOR" -ge 10 ]; then
         echo "     ✅ Python $PY_VERSION"
     else
-        echo "     ❌ Python $PY_VERSION found — need 3.11+"
-        ERRORS+=("Install Python 3.11+: brew install python@3.11")
+        echo "     ❌ Python $PY_VERSION found — need 3.10+"
+        ERRORS+=("Install Python 3.10+: brew install python@3.12")
     fi
 else
     echo "     ❌ Python not found"
-    ERRORS+=("Install Python: brew install python@3.11")
+    ERRORS+=("Install Python: brew install python@3.12")
 fi
 
 # ── 2. Check Node.js ──────────────────────────────────────
@@ -67,20 +67,35 @@ fi
 
 # ── 4. Create virtual environment ─────────────────────────
 echo "4/7  Setting up Python environment..."
-if [ ! -d .venv ]; then
-    python3 -m venv .venv
-    echo "     ✅ Created .venv"
+if command -v uv &>/dev/null; then
+    if [ ! -d .venv ]; then
+        uv venv --python=3.12 2>/dev/null || uv venv
+        echo "     ✅ Created .venv (via uv)"
+    else
+        echo "     ✅ .venv exists"
+    fi
 else
-    echo "     ✅ .venv exists"
+    if [ ! -d .venv ]; then
+        python3 -m venv .venv
+        echo "     ✅ Created .venv (via python3)"
+    else
+        echo "     ✅ .venv exists"
+    fi
 fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
-# ── 5. Install dependencies ───────────────────────────────
+# ── 5. Install dependencies ───────────────────────────────────
 echo "5/7  Installing Python dependencies..."
-pip install --quiet --upgrade pip
-pip install --quiet -e ".[dev]" 2>/dev/null || pip install --quiet -e .
-echo "     ✅ Dependencies installed"
+if command -v uv &>/dev/null; then
+    uv sync --group dev 2>/dev/null || uv sync
+    echo "     ✅ Dependencies installed (via uv)"
+else
+    pip install --quiet --upgrade pip
+    pip install --quiet -e . 2>/dev/null || true
+    echo "     ✅ Dependencies installed (via pip — dev extras may be missing)"
+    echo "     ⚠️  Install uv for full dev setup: curl -LsSf https://astral.sh/uv/install.sh | sh"
+fi
 
 # ── 6. Set up .env ────────────────────────────────────────
 echo "6/7  Checking environment..."
@@ -103,21 +118,17 @@ set -a
 source .env 2>/dev/null || true
 set +a
 MISSING_KEYS=()
-[ -z "${WATSONX_API_KEY:-}" ] && MISSING_KEYS+=("WATSONX_API_KEY")
-[ -z "${WATSONX_PROJECT_ID:-}" ] && MISSING_KEYS+=("WATSONX_PROJECT_ID")
+HAS_LLM=false
+[ -n "${WATSONX_API_KEY:-}" ] && [ -n "${WATSONX_PROJECT_ID:-}" ] && HAS_LLM=true
+[ -n "${OPENAI_API_KEY:-}" ] && HAS_LLM=true
+[ -n "${GROQ_API_KEY:-}" ] && HAS_LLM=true
 
-if [ ${#MISSING_KEYS[@]} -gt 0 ]; then
+if [ "$HAS_LLM" = false ]; then
     echo ""
-    echo "     ⚠️  Missing API keys in .env:"
-    for key in "${MISSING_KEYS[@]}"; do
-        echo "        - $key"
-    done
-    echo ""
-    echo "     Get WatsonX credentials:"
-    echo "       1. Go to https://cloud.ibm.com/watsonx"
-    echo "       2. Create a project"
-    echo "       3. Go to project settings → API key"
-    echo "       4. Copy API key and project ID into .env"
+    echo "     ⚠️  No LLM provider configured in .env. Set one of:"
+    echo "        - WATSONX_API_KEY + WATSONX_PROJECT_ID (IBM WatsonX)"
+    echo "        - OPENAI_API_KEY (OpenAI / compatible)"
+    echo "        - GROQ_API_KEY (Groq)"
 fi
 
 [ -z "${GITHUB_TOKEN:-}" ] && echo "     ⚠️  GITHUB_TOKEN not set — repo publishing will be skipped"

@@ -1,24 +1,21 @@
+import importlib
 import os
-from contextlib import redirect_stdout, redirect_stderr
+import sys
+from contextlib import redirect_stderr, redirect_stdout
+from datetime import datetime
 from io import StringIO
 from typing import Any
 from urllib.parse import quote
 
-from cuga.backend.activity_tracker.tracker import ActivityTracker
-from cuga.backend.tools_env.code_sandbox.e2b_sandbox import execute_code_in_e2b
-from cuga.backend.utils.id_utils import mask_with_timestamp
-from cuga.backend.cuga_graph.state.agent_state import AgentState
-
-
-import sys
-import importlib
-
-from datetime import datetime
-from loguru import logger
-from cuga.config import settings, LOGGING_DIR
-from cuga.backend.tools_env.registry.utils.api_utils import get_registry_base_url
 import docker
+from loguru import logger
 
+from cuga.backend.activity_tracker.tracker import ActivityTracker
+from cuga.backend.cuga_graph.state.agent_state import AgentState
+from cuga.backend.tools_env.code_sandbox.e2b_sandbox import execute_code_in_e2b
+from cuga.backend.tools_env.registry.utils.api_utils import get_registry_base_url
+from cuga.backend.utils.id_utils import mask_with_timestamp
+from cuga.config import LOGGING_DIR, settings
 
 tracker = ActivityTracker()
 
@@ -90,12 +87,15 @@ def get_premable(is_local=False, current_date=None, for_e2b=False):
             function_call_url = getattr(settings.server_ports, 'registry_host', None)
         if not function_call_url:
             # E2B cannot reach localhost - warn user
+            registry_port = getattr(
+                getattr(settings, "server_ports", None), "registry", 8010
+            )
             logger.error(
                 "E2B sandbox requires a publicly accessible URL. "
                 "Please set 'function_call_host' or 'registry_host' in settings.toml. "
-                "You can use ngrok or expose your registry server (port 8001) to the internet."
+                f"You can use ngrok or expose your registry server (port {registry_port}) to the internet."
             )
-            function_call_url = "http://localhost:8001"  # Will fail but at least show the issue
+            function_call_url = f"http://localhost:{registry_port}"  # Will fail but at least show the issue
         registry_host = f"{function_call_url}/functions/call?trajectory_path={quote(tracker.get_current_trajectory_path())}"
     # Check if registry_host was explicitly configured (non-E2B)
     elif hasattr(settings.server_ports, 'registry_host') and settings.server_ports.registry_host:
@@ -109,7 +109,7 @@ def get_premable(is_local=False, current_date=None, for_e2b=False):
         base_url = (
             registry_base  # localhost when is_local=True
             if is_local
-            else f"http://host.docker.internal:{str(settings.server_ports.registry)}"  # Docker host
+            else f"http://host.docker.internal:{settings.server_ports.registry!s}"  # Docker host
         )
         registry_host = (
             f"{base_url}/functions/call?trajectory_path={quote(tracker.get_current_trajectory_path())}"
@@ -273,14 +273,14 @@ async def run_local(code_content: str) -> ExecutionResult:
         logger.error("=" * 80)
         logger.error("SYNTAX ERROR IN GENERATED CODE")
         logger.error("=" * 80)
-        logger.error(f"Error Message: {str(e)}")
+        logger.error(f"Error Message: {e!s}")
         logger.error("=" * 80)
         logger.error("Full Stack Trace:")
         logger.error(error_details)
         logger.error("=" * 80)
 
         # Write detailed error with traceback to stderr
-        stderr_buffer.write(f"Error during execution: {type(e).__name__}(\"{str(e)}\")\n")
+        stderr_buffer.write(f"Error during execution: {type(e).__name__}(\"{e!s}\")\n")
         stderr_buffer.write("Traceback (most recent call last):\n")
         stderr_buffer.write(error_details)
     except Exception as e:
@@ -293,14 +293,14 @@ async def run_local(code_content: str) -> ExecutionResult:
         logger.error("EXCEPTION DURING CODE EXECUTION")
         logger.error("=" * 80)
         logger.error(f"Exception Type: {type(e).__name__}")
-        logger.error(f"Exception Message: {str(e)}")
+        logger.error(f"Exception Message: {e!s}")
         logger.error("=" * 80)
         logger.error("Full Stack Trace:")
         logger.error(error_details)
         logger.error("=" * 80)
 
         # Write detailed error with traceback to stderr
-        stderr_buffer.write(f"Error during execution: {type(e).__name__}(\"{str(e)}\")\n")
+        stderr_buffer.write(f"Error during execution: {type(e).__name__}(\"{e!s}\")\n")
         stderr_buffer.write("Traceback (most recent call last):\n")
         stderr_buffer.write(error_details)
 

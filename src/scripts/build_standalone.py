@@ -14,12 +14,12 @@ def build_assets():
     # Build frontend
     subprocess.run(
         ["pnpm", "--filter", "@carbon/ai-chat-examples-web-components-basic", "run", "build"],
-        cwd="frontend_workspaces",
+        cwd="src/frontend_workspaces",
         check=True,
     )
 
     # Build extension
-    subprocess.run(["pnpm", "--filter", "extension", "run", "release"], cwd="frontend_workspaces", check=True)
+    subprocess.run(["pnpm", "--filter", "extension", "run", "release"], cwd="src/frontend_workspaces", check=True)
 
     print("✅ Assets built successfully")
 
@@ -50,13 +50,13 @@ def create_standalone_executable():
 block_cipher = None
 
 a = Analysis(
-    ['cuga/backend/server/main.py'],
+    ['src/cuga/backend/server/main.py'],
     pathex=[],
     binaries=[],
     datas=[
-        ('cuga/backend/server/embedded_assets.py', 'cuga/backend/server/'),
-        ('config.py', '.'),
-        ('settings.toml', '.'),
+        ('src/cuga/backend/server/embedded_assets.py', 'cuga/backend/server/'),
+        ('src/cuga/config.py', 'cuga/'),
+        ('src/cuga/settings.toml', 'cuga/'),
     ],
     hiddenimports=[
         'cuga.backend.server.embedded_assets',

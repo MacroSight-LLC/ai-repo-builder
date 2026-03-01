@@ -42,6 +42,8 @@ dependencies = [
     "asyncpg>=0.30",
     "PyJWT[crypto]>=2.10.0",
     "cryptography>=44.0.0",
+    "pydantic>=2.0",
+    "nest-asyncio>=1.6",
 ]
 
 [project.optional-dependencies]
@@ -78,7 +80,6 @@ system_tests = ["**/*.py", "**/*.yaml", "**/*.sh"]
 
 
 [project.scripts]
-load_specs = "scripts.api_utils.load_openapi_specs:main"
 petstore = "scripts.commands:run_petstore"
 demo = "scripts.commands:run_demo"
 registry = "scripts.commands:run_api_registry"
@@ -86,14 +87,11 @@ registry_appworld = "scripts.commands:run_api_registry_appworld"
 
 graph = "scripts.draw_graph:main"
 eval_api = "scripts.commands:run_eval_api"
-appworld_eval = "evaluation.appworld_eval:run_main"
 appworld_setup = "scripts.commands:setup_appworld_environment"
 appworld_setup_docker = "scripts.commands:setup_appworld_environment_docker"
 cuga = "cuga.cli:app"
 cuga-build = "cuga.build_loop:main"
 cuga-generate = "cuga.generate:main"
-code = "evaluation.code_generator:main"
-exp = "scripts.eval_gui:main"
 digital_sales_mcp = "scripts.commands:run_digital_sales_mcp"
 digital_sales_openapi = "scripts.commands:run_digital_sales_openapi"
 test_llm = "scripts.commands:test_llm"
@@ -113,7 +111,6 @@ dev = [
     "pre-commit>=4.3.0",
     "questionary>=2.1.1",
     "rich>=14.2.0",
-    "nest-asyncio>=1.6",
 ]
 google-genai = ["langchain-google-genai>=2.0.11"]
 sandbox = ["llm-sandbox>=0.1.3"]

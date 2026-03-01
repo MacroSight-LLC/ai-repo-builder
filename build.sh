@@ -35,23 +35,28 @@ else
   echo "   ⚠️  No .venv found — using system Python"
 fi
 
-# Check required env vars
-MISSING_VARS=()
-for var in WATSONX_API_KEY WATSONX_PROJECT_ID; do
-  if [ -z "${!var:-}" ]; then
-    MISSING_VARS+=("$var")
-  fi
-done
-
-if [ ${#MISSING_VARS[@]} -gt 0 ]; then
-  echo "❌ Missing required environment variables:"
-  for var in "${MISSING_VARS[@]}"; do
-    echo "   - $var"
-  done
-  echo "   Set them in .env or export them."
+# Check required env vars — at least one LLM provider must be configured
+HAS_LLM=false
+if [ -n "${WATSONX_API_KEY:-}" ] && [ -n "${WATSONX_PROJECT_ID:-}" ]; then
+  HAS_LLM=true
+  echo "   ✅ WatsonX credentials set"
+fi
+if [ -n "${OPENAI_API_KEY:-}" ]; then
+  HAS_LLM=true
+  echo "   ✅ OpenAI API key set"
+fi
+if [ -n "${GROQ_API_KEY:-}" ]; then
+  HAS_LLM=true
+  echo "   ✅ Groq API key set"
+fi
+if [ "$HAS_LLM" = false ]; then
+  echo "❌ No LLM provider configured. Set one of:"
+  echo "   - WATSONX_API_KEY + WATSONX_PROJECT_ID (IBM WatsonX)"
+  echo "   - OPENAI_API_KEY (OpenAI / compatible)"
+  echo "   - GROQ_API_KEY (Groq)"
+  echo "   Add credentials to .env or export them."
   exit 1
 fi
-echo "   ✅ Environment variables set"
 
 export PYTHONPATH="$SCRIPT_DIR/src:${PYTHONPATH:-}"
 export SETTINGS_TOML_PATH="$SCRIPT_DIR/src/cuga/settings.toml"
@@ -114,7 +119,7 @@ echo "🏗️  AI Repo Builder — Plain English → Working Project"
 echo ""
 
 python -m cuga.generate \
-  --tools "$LOCAL_MCP" \
+  --tools "$MCP_SERVERS_FILE" \
   --policy "$SCRIPT_DIR/policies/coding-policy.yaml" \
   --output "$SCRIPT_DIR/output" \
   "$@"

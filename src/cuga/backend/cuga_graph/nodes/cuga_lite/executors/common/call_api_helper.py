@@ -1,7 +1,9 @@
-from typing import Callable
 import asyncio
 import time
+from collections.abc import Callable
+
 from loguru import logger
+
 from cuga.config import settings
 
 
@@ -17,17 +19,20 @@ class CallApiHelper:
         if not function_call_url:
             logger.warning(
                 "No function_call_host or registry_host configured. "
-                "Remote execution may fail. Using localhost fallback."
+                "Remote execution may fail. Using localhost fallback from settings."
             )
-            # TODO: validate if hardcoded port is correct and maybe take it from settings.toml
-            function_call_url = "http://localhost:8001"
+            registry_port = getattr(
+                getattr(settings, "server_ports", None), "registry", 8010
+            )
+            function_call_url = f"http://localhost:{registry_port}"
         return function_call_url
 
     @staticmethod
     def get_trajectory_path() -> str:
         """Get URL-encoded trajectory path from ActivityTracker."""
-        from cuga.backend.activity_tracker.tracker import ActivityTracker
         from urllib.parse import quote
+
+        from cuga.backend.activity_tracker.tracker import ActivityTracker
 
         tracker = ActivityTracker()
         return quote(tracker.get_current_trajectory_path())
@@ -44,10 +49,12 @@ class CallApiHelper:
             Async function that can call tools via tracker or registry
         """
         import json
+
         import aiohttp
-        from cuga.backend.tools_env.registry.utils.api_utils import get_registry_base_url
+
         from cuga.backend.activity_tracker.tracker import ActivityTracker
         from cuga.backend.cuga_graph.nodes.cuga_lite.tool_call_tracker import ToolCallTracker
+        from cuga.backend.tools_env.registry.utils.api_utils import get_registry_base_url
 
         tracker = ActivityTracker()
 
@@ -75,7 +82,7 @@ class CallApiHelper:
                         result = await asyncio.wait_for(
                             tracker.invoke_tool(app_name, api_name, args), timeout=timeout_seconds
                         )
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         error_msg = f"Tool call '{api_name}' timed out after {timeout_seconds} seconds"
                         raise TimeoutError(error_msg)
 
@@ -114,11 +121,11 @@ class CallApiHelper:
                                 except json.JSONDecodeError:
                                     result = response_data
                                 return result
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         error_msg = f"Tool call '{api_name}' timed out after {timeout_seconds} seconds"
                         raise TimeoutError(error_msg)
                     except Exception as e:
-                        error_msg = f"Error calling API {api_name}: {str(e)}"
+                        error_msg = f"Error calling API {api_name}: {e!s}"
                         raise Exception(error_msg)
                 else:
                     error_msg = f"Server '{app_name}' not found in tracker and registry is disabled"

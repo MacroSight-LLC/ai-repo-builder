@@ -13,20 +13,20 @@ def build_and_embed():
     """Build assets and embed them."""
     print("🏗️  Building and embedding assets...")
 
-    base_dir = Path.cwd()
+    base_dir = Path(__file__).resolve().parents[2]
 
     # Step 1: Build frontend
     print("📦 Building frontend...")
     subprocess.run(
         ["pnpm", "--filter", "@carbon/ai-chat-examples-web-components-basic", "run", "build"],
-        cwd=base_dir / "frontend_workspaces",
+        cwd=base_dir / "src" / "frontend_workspaces",
         check=True,
     )
 
     # Step 2: Build extension
     print("🔧 Building extension...")
     subprocess.run(
-        ["pnpm", "--filter", "extension", "run", "release"], cwd=base_dir / "frontend_workspaces", check=True
+        ["pnpm", "--filter", "extension", "run", "release"], cwd=base_dir / "src" / "frontend_workspaces", check=True
     )
 
     # Step 3: Embed assets
