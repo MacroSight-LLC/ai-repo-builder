@@ -282,9 +282,7 @@ class TestBootstrapMcp:
 
         mock_manager = MagicMock()
         mock_registry = AsyncMock()
-        mock_registry.start_servers = AsyncMock(
-            side_effect=RuntimeError("Docker not running")
-        )
+        mock_registry.start_servers = AsyncMock(side_effect=RuntimeError("Docker not running"))
 
         with (
             patch(self._LOADER, return_value={}),

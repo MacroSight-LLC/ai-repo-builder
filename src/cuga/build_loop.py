@@ -223,6 +223,42 @@ def _build_feedback_prompt(
         lines.append("- ORM detected but no migration files found. Generate initial migrations.")
         lines.append("")
 
+    # Test failures
+    tests = validation.get("tests", {})
+    if tests.get("has_tests") and tests.get("test_ok") is False:
+        lines.append("### Test Failures")
+        output = str(tests.get("test_output", ""))
+        # Extract just the failure summary (last 800 chars are most relevant)
+        if len(output) > 800:
+            output = output[-800:]
+        lines.append(f"```\n{output}\n```")
+        lines.append("")
+        count += 1
+
+    # Broken imports
+    imports = validation.get("imports", {})
+    broken_imports = imports.get("broken_imports", [])
+    if broken_imports:
+        lines.append("### Broken Imports")
+        for bi in broken_imports[: max_errors - count]:
+            lines.append(
+                f"- `{bi.get('file', '?')}`: cannot import `{bi.get('module', '?')}` "
+                f"— {bi.get('error', '?')}"
+            )
+            count += 1
+        lines.append("")
+
+    # Missing spec endpoints
+    endpoints = validation.get("endpoints", {})
+    missing_eps = endpoints.get("missing_endpoints", [])
+    if missing_eps:
+        lines.append("### Missing API Endpoints")
+        lines.append("These endpoints are in the spec but not found in the code:")
+        for ep in missing_eps[: max_errors - count]:
+            lines.append(f"- `{ep}` — register this route in the appropriate router")
+            count += 1
+        lines.append("")
+
     lines.append(
         "Fix ALL of the above issues. Write corrected files using the filesystem tools. "
         "Do NOT skip any file."
@@ -256,6 +292,126 @@ def _check_quality_gate(
     )
     verdict = QualityGate(gate_cfg).evaluate(validation)
     return verdict.passed
+
+
+# ── File-level tracking & escalation ───────────────────────────
+
+
+def _extract_failing_files(validation: dict[str, Any]) -> set[str]:
+    """Extract the set of files with errors from a validation report.
+
+    Args:
+        validation: Report dict from ``post_build.validate_project``.
+
+    Returns:
+        Set of relative file paths that have issues.
+    """
+    files: set[str] = set()
+
+    for err in validation.get("syntax_errors", []):
+        if isinstance(err, dict):
+            files.add(err.get("file", ""))
+        elif isinstance(err, str) and ":" in err:
+            files.add(err.split(":")[0])
+
+    for smell in validation.get("smells", []):
+        if smell.get("severity") == "error":
+            files.add(smell.get("file", ""))
+
+    for bi in (validation.get("imports", {}) or {}).get("broken_imports", []):
+        files.add(bi.get("file", ""))
+
+    files.discard("")
+    return files
+
+
+def _detect_regressions(
+    prev_validation: dict[str, Any],
+    curr_validation: dict[str, Any],
+) -> list[str]:
+    """Detect files that were clean but now have errors (regressions).
+
+    Args:
+        prev_validation: Validation report from the previous iteration.
+        curr_validation: Validation report from the current iteration.
+
+    Returns:
+        List of file paths that regressed.
+    """
+    prev_failing = _extract_failing_files(prev_validation)
+    curr_failing = _extract_failing_files(curr_validation)
+    # Regressions = files that failed now but not previously
+    return sorted(curr_failing - prev_failing)
+
+
+def _build_escalation_hint(
+    error_history: dict[str, int],
+    iteration: int,
+) -> str | None:
+    """Produce an escalation hint if the same errors persist across iterations.
+
+    Args:
+        error_history: Map of error signature → count of iterations it appeared in.
+        iteration: Current iteration number.
+
+    Returns:
+        Escalation guidance string or None if no escalation needed.
+    """
+    stuck_errors = [sig for sig, count in error_history.items() if count >= 2]
+    if not stuck_errors:
+        return None
+
+    hints: list[str] = [
+        "\n### ⚠️ Escalation — Persistent Errors Detected",
+        "",
+        f"The following errors have persisted across {iteration} iterations. "
+        "Try a DIFFERENT approach:",
+        "",
+    ]
+
+    for sig in stuck_errors[:5]:
+        hints.append(f"- `{sig}`")
+
+    hints.extend([
+        "",
+        "**Escalation strategies:**",
+        "1. Use **context7** to look up the correct API/syntax for the library causing the error.",
+        "2. Simplify: replace the problematic implementation with a simpler alternative.",
+        "3. Split: break a complex file into smaller, independently testable modules.",
+        "4. If an import fails, check if the package name is correct and add it to dependencies.",
+        "5. If a test fails repeatedly, check if the test assumptions are wrong (not just the code).",
+        "",
+    ])
+    return "\n".join(hints)
+
+
+def _error_signature(validation: dict[str, Any]) -> set[str]:
+    """Extract unique error signatures for tracking persistence.
+
+    Args:
+        validation: Validation report dict.
+
+    Returns:
+        Set of short error signature strings.
+    """
+    sigs: set[str] = set()
+
+    for err in validation.get("syntax_errors", []):
+        if isinstance(err, dict):
+            sigs.add(f"syntax:{err.get('file', '?')}:{err.get('issue', '?')[:50]}")
+
+    for smell in validation.get("smells", []):
+        if smell.get("severity") == "error":
+            sigs.add(f"smell:{smell.get('file', '?')}:{smell.get('issue', '?')[:50]}")
+
+    for bi in (validation.get("imports", {}) or {}).get("broken_imports", []):
+        sigs.add(f"import:{bi.get('file', '?')}:{bi.get('module', '?')}")
+
+    tests = validation.get("tests", {})
+    if tests.get("has_tests") and tests.get("test_ok") is False:
+        sigs.add(f"tests_failed:{tests.get('tests_failed', 0)}")
+
+    return sigs
 
 
 # ── The Loop ───────────────────────────────────────────────────
@@ -322,6 +478,7 @@ class BuildLoop:
 
         thread_id: str | None = None
         last_validation: dict[str, Any] = {}
+        error_history: dict[str, int] = {}  # error signature → iteration count
 
         for iteration in range(1, self.config.max_iterations + 1):
             logger.info(
@@ -335,11 +492,44 @@ class BuildLoop:
                 prompt = initial_prompt
             else:
                 # Feed the error summary from the previous validation
-                prompt = _build_feedback_prompt(
+                feedback = _build_feedback_prompt(
                     last_validation,
                     iteration - 1,
                     self.config.feedback_max_errors,
                 )
+
+                # ── Targeted retry: scope to failing files ──────
+                failing_files = _extract_failing_files(last_validation)
+                if failing_files:
+                    file_list = ", ".join(f"`{f}`" for f in sorted(failing_files))
+                    feedback += (
+                        f"\n\n**Focus on these files:** {file_list}\n"
+                        "Read each file, fix the specific errors above, and rewrite. "
+                        "Do NOT touch files that are already passing."
+                    )
+
+                # ── Regression detection ────────────────────────
+                if self._iterations:
+                    prev_val = self._iterations[-1].validation
+                    if prev_val:
+                        regressions = _detect_regressions(prev_val, last_validation)
+                        if regressions:
+                            reg_list = ", ".join(f"`{f}`" for f in regressions)
+                            feedback += (
+                                f"\n\n⚠️ **Regressions detected** in: {reg_list}\n"
+                                "These files were clean before but now have errors. "
+                                "Revert your changes to these files and fix them carefully."
+                            )
+                            logger.warning(
+                                "Regression in {} files: {}", len(regressions), regressions
+                            )
+
+                # ── Escalation hint ─────────────────────────────
+                escalation = _build_escalation_hint(error_history, iteration)
+                if escalation:
+                    feedback += escalation
+
+                prompt = feedback
 
             # ── Invoke ──────────────────────────────────────────
             iter_t0 = time.time()
@@ -368,6 +558,11 @@ class BuildLoop:
             # ── Validate ────────────────────────────────────────
             last_validation = validate_project(self.project_dir, self.spec)
             passed = _check_quality_gate(last_validation, self.config)
+
+            # Track error persistence for escalation
+            current_sigs = _error_signature(last_validation)
+            for sig in current_sigs:
+                error_history[sig] = error_history.get(sig, 0) + 1
 
             feedback = (
                 None

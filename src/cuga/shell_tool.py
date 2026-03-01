@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import shlex
 from pathlib import Path
 
@@ -89,6 +90,74 @@ class ShellInput(BaseModel):
     )
 
 
+# ── Error line patterns (for smart truncation) ──────────────────
+
+_ERROR_LINE_PATTERN = re.compile(
+    r"(error|Error|ERROR|FAIL|FAILED|Traceback|Exception|ModuleNotFoundError"
+    r"|ImportError|SyntaxError|TypeError|ValueError|NameError"
+    r"|AttributeError|KeyError|AssertionError|FileNotFoundError"
+    r"|raise |assert |❌|CRITICAL)",
+)
+
+
+def _smart_truncate(text: str, max_chars: int) -> str:
+    """Truncate text while prioritising error-relevant lines.
+
+    Instead of naively keeping head + tail (which drops errors in the middle),
+    this function:
+    1. Always keeps the first 20 lines (context).
+    2. Keeps ALL lines matching error patterns.
+    3. Always keeps the last 30 lines (final summary / exit info).
+    4. Fills remaining budget with surrounding context.
+
+    Args:
+        text: Raw output text to truncate.
+        max_chars: Target character budget.
+
+    Returns:
+        Truncated text with ``[truncated]`` markers.
+    """
+    if len(text) <= max_chars:
+        return text
+
+    lines = text.splitlines()
+    if len(lines) <= 60:
+        # Short enough to keep head + tail approach
+        return text[:max_chars // 2] + "\n...[truncated]...\n" + text[-(max_chars // 3):]
+
+    head_count = 20
+    tail_count = 30
+    head = lines[:head_count]
+    tail = lines[-tail_count:]
+
+    # Find error lines in the middle section
+    middle = lines[head_count:-tail_count]
+    error_lines: list[str] = []
+    for i, line in enumerate(middle):
+        if _ERROR_LINE_PATTERN.search(line):
+            # Include 1 line of context before and after
+            start = max(0, i - 1)
+            end = min(len(middle), i + 2)
+            for ctx_line in middle[start:end]:
+                if ctx_line not in error_lines:
+                    error_lines.append(ctx_line)
+
+    # Assemble
+    parts = head
+    if error_lines:
+        parts.append(f"\n...[{len(middle) - len(error_lines)} lines truncated — showing errors]...\n")
+        parts.extend(error_lines)
+    else:
+        parts.append(f"\n...[{len(middle)} lines truncated]...\n")
+    parts.extend(tail)
+
+    result = "\n".join(parts)
+    # Final safety trim if still over budget
+    if len(result) > max_chars:
+        result = result[:max_chars - 50] + "\n...[final truncation]..."
+    return result
+
+
 async def _execute_shell(command: str, working_dir: str = "") -> str:
     """Execute a shell command in the project output directory."""
     # Validate
@@ -118,14 +187,13 @@ async def _execute_shell(command: str, working_dir: str = "") -> str:
         result_parts = []
         if stdout:
             out_text = stdout.decode(errors="replace")
-            # Truncate very long output
             if len(out_text) > 8000:
-                out_text = out_text[:4000] + "\n...[truncated]...\n" + out_text[-2000:]
+                out_text = _smart_truncate(out_text, 8000)
             result_parts.append(out_text)
         if stderr:
             err_text = stderr.decode(errors="replace")
             if len(err_text) > 4000:
-                err_text = err_text[:2000] + "\n...[truncated]...\n" + err_text[-1000:]
+                err_text = _smart_truncate(err_text, 4000)
             result_parts.append(f"STDERR:\n{err_text}")
 
         result_parts.append(f"Exit code: {proc.returncode}")

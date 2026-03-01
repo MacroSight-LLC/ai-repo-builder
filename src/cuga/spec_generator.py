@@ -68,6 +68,21 @@ structure:
       path          – relative filepath
       purpose       – what this file does
       key_contents  – list of strings describing what must go inside the file
+                      (include typed function signatures, not just prose)
+
+pages:          – list of objects (for apps with a frontend UI), each with:
+    path        – URL route path (e.g. "/" or "/dashboard")
+    name        – human-readable page name
+    components  – list of component names used on this page
+    data_source – API endpoint(s) this page fetches from
+    auth        – "public" | "authenticated" | "admin"
+
+components:     – list of objects (for apps with a frontend UI), each with:
+    name        – PascalCase component name
+    type        – "page" | "layout" | "widget" | "form" | "table" | "modal" | "nav"
+    props       – list of {name, type, required} objects
+    state       – list of state variables this component manages
+    children    – list of child component names (for composition)
 
 features:       – list of objects, each with:
     name        – short label
@@ -127,16 +142,17 @@ security:
 RULES:
 1. ALWAYS include every section listed above.  Never skip a section.
 2. If the user does not specify a technology, choose the BEST modern option.
-3. Every file in the structure section MUST have key_contents describing what
-   goes inside.
-4. Every CRUD feature MUST have detailed endpoints.
-5. Every data-model entity MUST have complete field definitions.
+3. Every file in the structure section MUST have key_contents with typed function
+   signatures and concrete implementation descriptions, not vague prose.
+4. Every CRUD feature MUST have detailed endpoints with request/response shapes.
+5. Every data-model entity MUST have complete field definitions with types.
 6. The spec must be detailed enough that a developer could build the entire
    project WITHOUT asking any clarifying questions.
 7. Default to modern, production-grade choices (not toy/tutorial patterns).
 8. Always include auth, testing, Docker, CI/CD, and security — even if
    not explicitly asked for.
-9. If it's a full-stack app, include BOTH frontend and backend files.
+9. If it's a full-stack app, include BOTH frontend and backend files, PLUS
+   the pages and components sections describing the UI hierarchy.
 10. Use the user's exact wording for name and description where possible.
 11. EVERY project MUST include these files in structure.files:
     - .gitignore (with Python/Node exclusions as appropriate)
@@ -146,15 +162,21 @@ RULES:
     - Dockerfile (multi-stage, production-ready)
     - docker-compose.yaml (app + database + any other services)
     - .github/workflows/ci.yaml (lint → test → build pipeline)
+12. For full-stack apps the pages section MUST list every user-facing route.
+13. For full-stack apps the components section MUST define reusable UI components
+    with their props interface and children hierarchy.
+14. Every component in key_contents should specify its props interface as a
+    TypeScript-style type (e.g. "props: { items: Item[]; onDelete: (id: string) => void }").
 
 TECHNOLOGY DEFAULTS (when user does not specify):
   Python backend → FastAPI + SQLAlchemy + Alembic + pytest
   TypeScript backend → NestJS + Prisma + Vitest
-  Frontend → Next.js 14 + Tailwind + shadcn/ui
+  Frontend → Next.js 14 (App Router) + Tailwind + shadcn/ui
   Database → PostgreSQL 16
   Cache → Redis 7
   Auth → JWT with refresh tokens
   Deploy → Docker + GitHub Actions
+  State management → zustand (lightweight) or React Server Components (Next.js)
 
 Output ONLY the YAML content.  No markdown fences.  No explanatory prose.
 """

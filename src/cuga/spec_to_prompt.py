@@ -88,6 +88,8 @@ def spec_to_prompt(
     data_model = spec.get("data_model") or {}
     api = spec.get("api") or {}
     testing = spec.get("testing") or {}
+    pages = spec.get("pages") or []
+    components = spec.get("components") or []
     deployment = spec.get("deployment") or {}
     standards = spec.get("standards") or {}
     security = spec.get("security") or {}
@@ -150,6 +152,9 @@ def spec_to_prompt(
                 "the described contents — no stubs or placeholders.\n"
             )
             for f in files:
+                if isinstance(f, str):
+                    parts.append(f"- `{name}/{f}`")
+                    continue
                 fpath = f.get("path", "")
                 purpose = f.get("purpose", "")
                 contents = f.get("key_contents", [])
@@ -190,6 +195,56 @@ def spec_to_prompt(
             parts.append(f"\nMigrations: Use {migration_tool}")
         if (data_model.get("migrations") or {}).get("seed_data"):
             parts.append("Include seed data for development.")
+
+    # ── Pages (frontend routes) ────────────────────────────────
+    if pages:
+        parts.append("\n## Pages / Routes")
+        parts.append(
+            "Each page maps to a URL route. Implement them as Next.js/React "
+            "pages (or the equivalent in your framework).\n"
+        )
+        for page in pages:
+            ppath = page.get("path", "/")
+            pname = page.get("name", "")
+            auth = page.get("auth", "public")
+            parts.append(f"### `{ppath}` — {pname} (auth: {auth})")
+            data_src = page.get("data_source")
+            if data_src:
+                if isinstance(data_src, list):
+                    parts.append(f"Data sources: {', '.join(data_src)}")
+                else:
+                    parts.append(f"Data source: {data_src}")
+            page_components = page.get("components", [])
+            if page_components:
+                parts.append(f"Components: {', '.join(page_components)}")
+            parts.append("")
+
+    # ── UI Components ──────────────────────────────────────────
+    if components:
+        parts.append("\n## UI Component Hierarchy")
+        parts.append(
+            "Each component below must be implemented as a standalone module "
+            "with typed props. Compose them to build the pages above.\n"
+        )
+        for comp in components:
+            cname = comp.get("name", "")
+            ctype = comp.get("type", "widget")
+            parts.append(f"### `{cname}` (type: {ctype})")
+            props = comp.get("props", [])
+            if props:
+                parts.append("Props interface:")
+                for p in props:
+                    req = "required" if p.get("required", True) else "optional"
+                    parts.append(
+                        f"  - {p.get('name', '?')}: {p.get('type', 'unknown')} ({req})"
+                    )
+            state = comp.get("state", [])
+            if state:
+                parts.append(f"Local state: {', '.join(state)}")
+            children = comp.get("children", [])
+            if children:
+                parts.append(f"Children: {', '.join(children)}")
+            parts.append("")
 
     # ── Features ───────────────────────────────────────────────
     if features:
@@ -492,6 +547,32 @@ Never run commands from the workspace root — always cd into {ws}/{name}.
 
 10. Use **postgres** to verify database schema if applicable.
 11. If frontend exists, use **puppeteer** to verify it renders.
+
+### Phase 3.5: Frontend Validation (if frontend exists)
+   **Step 3e — Install frontend dependencies**:
+   `cd {ws}/{name} && npm install` (or pnpm/yarn)
+   If install fails, check package.json for missing or invalid packages.
+
+   **Step 3f — TypeScript type check** (if using TypeScript):
+   `cd {ws}/{name} && npx tsc --noEmit`
+   If type errors:
+     1. READ each error — file:line "Type 'X' is not assignable to type 'Y'"
+     2. Fix the type mismatch in the source file
+     3. Re-run tsc
+
+   **Step 3g — Frontend build**:
+   `cd {ws}/{name} && npm run build`
+   If build fails:
+     1. Most common: missing imports, incorrect component props, `"use client"` directive missing
+     2. For Next.js App Router: pages in `app/` are Server Components by default
+        — add `"use client"` at the top only if using hooks (useState, useEffect, onClick, etc.)
+     3. Fix and re-run build
+
+   **Step 3h — API client consistency**:
+   Verify that every frontend fetch/API call matches a backend endpoint:
+   - URL paths must match the backend router prefixes + route paths
+   - Request/response types must match the backend schemas
+   - Auth headers must be included for protected endpoints
 
 ### Phase 4: Test
 12. Run: `cd {ws}/{name} && python -m pytest tests/ -v --tb=short`

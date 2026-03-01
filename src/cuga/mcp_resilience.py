@@ -153,9 +153,7 @@ async def health_check_servers(
                 )
             )
         except Exception as exc:
-            report.servers.append(
-                ServerHealth(name=name, healthy=False, error=str(exc))
-            )
+            report.servers.append(ServerHealth(name=name, healthy=False, error=str(exc)))
 
     healthy = report.healthy_count
     total = len(report.servers)

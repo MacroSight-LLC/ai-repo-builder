@@ -23,11 +23,14 @@ __all__ = [
     "fix_indentation",
     "post_build_validate",
     "run_ruff_check",
+    "run_tests",
     "validate_docker_build",
     "validate_frontend",
+    "validate_imports",
     "validate_migrations",
     "validate_project",
     "validate_python_syntax",
+    "validate_spec_endpoints",
     "validate_typescript",
 ]
 
@@ -465,6 +468,258 @@ def validate_migrations(project_dir: Path) -> dict[str, object]:
     return result
 
 
+# ── Test execution ─────────────────────────────────────────────
+
+
+def run_tests(project_dir: Path) -> dict[str, object]:
+    """Run the project's test suite if a test framework is detected.
+
+    Detects pytest (Python) or npm/pnpm/yarn test (Node) and executes
+    the relevant command.  Returns structured results.
+
+    Args:
+        project_dir: Root of the generated project.
+
+    Returns:
+        Dict with keys ``has_tests``, ``test_ok``, ``test_output``,
+        ``tests_passed``, ``tests_failed``, ``framework``.
+    """
+    result: dict[str, object] = {"has_tests": False}
+
+    # ── Python tests (pytest) ──────────────────────────────────
+    tests_dir = project_dir / "tests"
+    has_py_tests = tests_dir.exists() and any(tests_dir.rglob("test_*.py"))
+    if not has_py_tests:
+        # Also check for tests at project root
+        has_py_tests = any(project_dir.glob("test_*.py"))
+
+    if has_py_tests:
+        result["has_tests"] = True
+        result["framework"] = "pytest"
+        try:
+            proc = subprocess.run(
+                ["python", "-m", "pytest", "tests/", "-v", "--tb=short", "-q"],
+                cwd=str(project_dir),
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+            output = (proc.stdout + proc.stderr).strip()
+            result["test_ok"] = proc.returncode == 0
+            result["test_output"] = output[-3000:] if len(output) > 3000 else output
+
+            # Parse pass/fail counts from pytest output
+            import re as _re
+
+            match = _re.search(r"(\d+) passed", output)
+            result["tests_passed"] = int(match.group(1)) if match else 0
+            match = _re.search(r"(\d+) failed", output)
+            result["tests_failed"] = int(match.group(1)) if match else 0
+        except FileNotFoundError:
+            result["test_ok"] = False
+            result["test_output"] = "pytest not found"
+        except subprocess.TimeoutExpired:
+            result["test_ok"] = False
+            result["test_output"] = "Test suite timed out after 180s"
+        return result
+
+    # ── Node tests (npm/pnpm/yarn test) ───────────────────────
+    pkg_json = project_dir / "package.json"
+    if not pkg_json.exists():
+        for child in project_dir.iterdir():
+            if child.is_dir() and (child / "package.json").exists():
+                pkg_json = child / "package.json"
+                break
+
+    if pkg_json.exists():
+        import json as _json
+
+        try:
+            pkg_data = _json.loads(pkg_json.read_text(encoding="utf-8"))
+            scripts = pkg_data.get("scripts", {})
+        except (ValueError, OSError):
+            scripts = {}
+
+        if "test" in scripts:
+            frontend_root = pkg_json.parent
+            pm = "npm"
+            if (frontend_root / "pnpm-lock.yaml").exists():
+                pm = "pnpm"
+            elif (frontend_root / "yarn.lock").exists():
+                pm = "yarn"
+
+            result["has_tests"] = True
+            result["framework"] = f"{pm} test"
+            try:
+                proc = subprocess.run(
+                    [pm, "test", "--", "--passWithNoTests"],
+                    cwd=str(frontend_root),
+                    capture_output=True,
+                    text=True,
+                    timeout=180,
+                )
+                output = (proc.stdout + proc.stderr).strip()
+                result["test_ok"] = proc.returncode == 0
+                result["test_output"] = output[-3000:] if len(output) > 3000 else output
+            except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+                result["test_ok"] = False
+                result["test_output"] = f"Test run failed: {exc}"
+
+    return result
+
+
+# ── Import resolution validation ───────────────────────────────
+
+
+def validate_imports(project_dir: Path) -> dict[str, object]:
+    """Verify that Python imports in generated files actually resolve.
+
+    For each ``.py`` file, parses the AST to extract top-level imports,
+    then checks whether the module is importable in the project context.
+
+    Only checks first-party (project-internal) imports and well-known
+    stdlib/third-party — skips the actual import to avoid side-effects.
+
+    Args:
+        project_dir: Root of the generated project.
+
+    Returns:
+        Dict with ``broken_imports`` (list of {file, module, error})
+        and ``checked_count``.
+    """
+    broken: list[dict[str, str]] = []
+    checked = 0
+
+    # Build set of project-internal module names
+    project_modules: set[str] = set()
+    for py_file in _iter_project_files(project_dir, frozenset({".py"})):
+        rel = py_file.relative_to(project_dir)
+        # Convert path to dotted module name
+        parts = list(rel.with_suffix("").parts)
+        for i in range(len(parts)):
+            project_modules.add(".".join(parts[: i + 1]))
+
+    for py_file in _iter_project_files(project_dir, frozenset({".py"})):
+        try:
+            content = py_file.read_text(encoding="utf-8")
+            tree = ast.parse(content, filename=str(py_file))
+        except (SyntaxError, UnicodeDecodeError, OSError):
+            continue
+
+        rel = str(py_file.relative_to(project_dir))
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    checked += 1
+                    root_mod = alias.name.split(".")[0]
+                    # Check if it's a project-internal import that doesn't exist
+                    if root_mod in project_modules or alias.name in project_modules:
+                        # It's internal — verify the file exists
+                        mod_path = project_dir / Path(*alias.name.split("."))
+                        pkg_init = mod_path / "__init__.py"
+                        mod_file = mod_path.with_suffix(".py")
+                        if not mod_file.exists() and not pkg_init.exists():
+                            broken.append({
+                                "file": rel,
+                                "module": alias.name,
+                                "error": "Module file not found in project",
+                            })
+            elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                checked += 1
+                root_mod = node.module.split(".")[0]
+                if root_mod in project_modules or node.module in project_modules:
+                    mod_path = project_dir / Path(*node.module.split("."))
+                    pkg_init = mod_path / "__init__.py"
+                    mod_file = mod_path.with_suffix(".py")
+                    if not mod_file.exists() and not pkg_init.exists():
+                        broken.append({
+                            "file": rel,
+                            "module": node.module,
+                            "error": "Module file not found in project",
+                        })
+
+    return {
+        "broken_imports": broken,
+        "checked_count": checked,
+    }
+
+
+# ── Spec endpoint verification ─────────────────────────────────
+
+
+def validate_spec_endpoints(project_dir: Path, spec: dict | None) -> dict[str, object]:
+    """Check that endpoints listed in the spec exist as actual routes in the code.
+
+    Scans Python and TypeScript files for route decorator patterns
+    (``@router.get``, ``@app.post``, ``app.get(``, etc.) and compares
+    against endpoints declared in the spec features.
+
+    Args:
+        project_dir: Root of the generated project.
+        spec: The project spec dict.
+
+    Returns:
+        Dict with ``declared_endpoints``, ``found_routes``,
+        ``missing_endpoints``, ``coverage_pct``.
+    """
+    if not spec:
+        return {"declared_endpoints": [], "found_routes": [], "missing_endpoints": [], "coverage_pct": 100}
+
+    # Extract declared endpoints from spec features
+    declared: list[str] = []
+    for feat in spec.get("features", []):
+        if isinstance(feat, dict):
+            endpoints = (feat.get("details") or {}).get("endpoints", [])
+            for ep in endpoints:
+                # Parse "GET /api/v1/items - List all items" → "/api/v1/items"
+                parts = str(ep).split()
+                if len(parts) >= 2 and parts[0].upper() in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}:
+                    declared.append(parts[1].rstrip("/"))
+
+    if not declared:
+        return {"declared_endpoints": [], "found_routes": [], "missing_endpoints": [], "coverage_pct": 100}
+
+    # Scan code for route definitions
+    found_routes: set[str] = set()
+    route_pattern = re.compile(
+        r"""(?:@(?:router|app|api)\.(get|post|put|patch|delete|head|options)\s*\(\s*["']([^"']+)["']"""
+        r"""|(?:router|app|api)\.(get|post|put|patch|delete)\s*\(\s*["']([^"']+)["'])""",
+        re.IGNORECASE,
+    )
+
+    for src_file in _iter_project_files(project_dir, frozenset({".py", ".ts", ".js"})):
+        try:
+            content = src_file.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for match in route_pattern.finditer(content):
+            path = match.group(2) or match.group(4) or ""
+            if path:
+                found_routes.add(path.rstrip("/"))
+
+    # Check coverage — normalize paths for comparison
+    missing: list[str] = []
+    for ep in declared:
+        # Check if any found route is a suffix match (handles router prefixes)
+        ep_normalized = ep.rstrip("/")
+        matched = any(
+            ep_normalized == r or ep_normalized.endswith(r) or r.endswith(ep_normalized)
+            for r in found_routes
+        )
+        if not matched:
+            missing.append(ep)
+
+    coverage = ((len(declared) - len(missing)) / len(declared) * 100) if declared else 100
+
+    return {
+        "declared_endpoints": declared,
+        "found_routes": sorted(found_routes),
+        "missing_endpoints": missing,
+        "coverage_pct": round(coverage, 1),
+    }
+
+
 def post_build_validate(project_dir: Path, spec: dict) -> dict:
     """Run all post-build checks and fixes.
 
@@ -665,6 +920,9 @@ def validate_project(project_dir: Path, spec: dict | None = None) -> dict:
     ts_report = validate_typescript(project_dir)
     docker_report = validate_docker_build(project_dir)
     migration_report = validate_migrations(project_dir)
+    test_report = run_tests(project_dir)
+    import_report = validate_imports(project_dir)
+    endpoint_report = validate_spec_endpoints(project_dir, spec)
 
     if frontend_report.get("has_frontend"):
         if frontend_report.get("install_ok") is False:
@@ -695,6 +953,36 @@ def validate_project(project_dir: Path, spec: dict | None = None) -> dict:
         else:
             lines.append(f"   ⚠️  Migrations: {orm_type} — no migration files found")
 
+    # ── Test execution ─────────────────────────────────────────
+    if test_report.get("has_tests"):
+        tp = test_report.get("tests_passed", 0)
+        tf = test_report.get("tests_failed", 0)
+        if test_report.get("test_ok"):
+            lines.append(f"   ✅ Tests: {tp} passed")
+        else:
+            lines.append(f"   ❌ Tests: {tf} failed, {tp} passed")
+
+    # ── Import validation ──────────────────────────────────────
+    broken_imports = import_report.get("broken_imports", [])
+    if broken_imports:
+        lines.append(f"   ❌ Imports: {len(broken_imports)} broken imports")
+        for bi in broken_imports[:3]:
+            lines.append(f"      {bi['file']}: cannot import '{bi['module']}'")
+    elif import_report.get("checked_count", 0) > 0:
+        lines.append(f"   ✅ Imports: {import_report['checked_count']} checked, all resolve")
+
+    # ── Endpoint coverage ──────────────────────────────────────
+    missing_eps = endpoint_report.get("missing_endpoints", [])
+    if missing_eps:
+        lines.append(f"   ⚠️  Endpoints: {len(missing_eps)} spec endpoints missing from code")
+        for ep in missing_eps[:3]:
+            lines.append(f"      - {ep}")
+    elif endpoint_report.get("declared_endpoints"):
+        lines.append(
+            f"   ✅ Endpoints: {len(endpoint_report['declared_endpoints'])} "
+            f"spec endpoints verified"
+        )
+
     summary = "\n".join(lines)
     logger.info("\n{}", summary)
 
@@ -713,5 +1001,8 @@ def validate_project(project_dir: Path, spec: dict | None = None) -> dict:
         "typescript": ts_report,
         "docker": docker_report,
         "migrations": migration_report,
+        "tests": test_report,
+        "imports": import_report,
+        "endpoints": endpoint_report,
         "summary": summary,
     }

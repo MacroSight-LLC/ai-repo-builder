@@ -102,11 +102,7 @@ async def bootstrap_mcp(
 
     # Resolve ENV: auth references (e.g. "ENV:GITHUB_TOKEN")
     for svc in services.values():
-        if (
-            svc.auth
-            and isinstance(svc.auth.value, str)
-            and svc.auth.value.startswith("ENV:")
-        ):
+        if svc.auth and isinstance(svc.auth.value, str) and svc.auth.value.startswith("ENV:"):
             env_key = svc.auth.value[4:]
             resolved = os.environ.get(env_key, "")
             if not resolved:
@@ -150,9 +146,7 @@ async def bootstrap_mcp(
     # Log details of failed servers
     if hasattr(manager, "initialization_errors") and manager.initialization_errors:
         for srv_name, err in manager.initialization_errors.items():
-            logger.warning(
-                "MCP server '{}' unavailable: {}", srv_name, err.get("error", "unknown")
-            )
+            logger.warning("MCP server '{}' unavailable: {}", srv_name, err.get("error", "unknown"))
 
     # Create tools from connected MCP servers
     all_tools: list[Any] = list(create_tools_from_mcp_manager(manager))

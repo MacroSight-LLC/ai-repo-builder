@@ -46,7 +46,9 @@ def _find_config_file(filename: str, env_var_name: str) -> str:
 
 
 SETTINGS_TOML_PATH = _find_config_file("settings.toml", "SETTINGS_TOML_PATH")
-CONFIGURATIONS_DIR = os.environ.get("CUGA_CONFIGURATIONS_DIR", os.path.join(PACKAGE_ROOT, "configurations"))
+CONFIGURATIONS_DIR = os.environ.get(
+    "CUGA_CONFIGURATIONS_DIR", os.path.join(PACKAGE_ROOT, "configurations")
+)
 MODELS_DIR = os.path.join(CONFIGURATIONS_DIR, "models")
 MODES_DIR = os.path.join(CONFIGURATIONS_DIR, "modes")
 MEMORY_DIR = os.path.join(CONFIGURATIONS_DIR, "memory")
@@ -71,6 +73,7 @@ for key, value in os.environ.items():
     if key.startswith("WA_"):
         new_key = key[3:]
         os.environ[new_key] = value
+
 
 def _build_app_mapping() -> dict[str, str]:
     """Build URL→app-name mapping from WA_* environment variables.
@@ -181,7 +184,7 @@ base_settings = Dynaconf(
     ],
     validators=validators,
 )
-logger.info("Running cuga in *{}* mode".format(base_settings.features.cuga_mode))
+logger.info(f"Running cuga in *{base_settings.features.cuga_mode}* mode")
 if base_settings.advanced_features.tracker_enabled:
     logger.info("✅ tracker enabled - logs and trajectory data will be saved")
 else:
@@ -189,11 +192,11 @@ else:
 # Read and sanitize the model settings filename (Windows users sometimes include quotes)
 default_llm = os.environ.get("AGENT_SETTING_CONFIG", "settings.openai.toml")
 # Remove inline comments (everything after #) and strip quotes/whitespace
-default_llm = default_llm.split('#')[0].strip().strip('"').strip("'").strip()
+default_llm = default_llm.split("#")[0].strip().strip('"').strip("'").strip()
 # Fall back to default if the env var was set but empty (e.g. missing GitHub secret)
 if not default_llm:
     default_llm = "settings.openai.toml"
-logger.info("loaded llm settings *{}*".format(default_llm))
+logger.info(f"loaded llm settings *{default_llm}*")
 
 # Resolve absolute config file paths
 models_file_path = os.path.join(MODELS_DIR, default_llm)
@@ -227,7 +230,9 @@ if os.getenv("CUGA_STRICT_CONFIG", "1") == "1":
             raise FileNotFoundError(f"Could not find memory configuration file: {mem0_file_path}.")
 
         if not os.path.isfile(milvus_file_path):
-            raise FileNotFoundError(f"Could not find memory configuration file: {milvus_file_path}.")
+            raise FileNotFoundError(
+                f"Could not find memory configuration file: {milvus_file_path}."
+            )
 
         if not os.path.isfile(tips_extractor_file_path):
             raise FileNotFoundError(

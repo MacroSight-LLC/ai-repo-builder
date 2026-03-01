@@ -1362,6 +1362,8 @@ async def quality_gate(
     verdict = gate.evaluate(validation, stack=body.get("stack"))
 
     return JSONResponse(asdict(verdict))
+
+
 async def auth_config():
     return JSONResponse({"enabled": _auth_enabled()})
 

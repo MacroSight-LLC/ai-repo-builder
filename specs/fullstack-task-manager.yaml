@@ -1,0 +1,587 @@
+name: fullstack-task-manager
+description: >
+  A full-stack task management application with a Next.js 14 frontend
+  (App Router, Tailwind, shadcn/ui) and a FastAPI backend. Supports
+  user authentication (JWT), task CRUD with categories and due dates,
+  real-time status updates, and a responsive dashboard.
+
+version: "0.1.0"
+
+stack:
+  language: python
+  runtime: python3.11
+  frontend:
+    framework: nextjs
+    styling: tailwind
+    state: zustand
+  backend:
+    framework: fastapi
+    api_style: rest
+  database:
+    primary: postgresql
+    orm: sqlalchemy
+    cache: redis
+  infrastructure:
+    containerization: docker
+    ci_cd: github-actions
+    hosting: docker-compose
+
+structure:
+  files:
+    # ── Backend ──────────────────────────────────────
+    - path: backend/pyproject.toml
+      purpose: Python project config with FastAPI, SQLAlchemy, Alembic, pytest deps
+      key_contents:
+        - "[project] name, version, dependencies"
+        - "[project.optional-dependencies] dev = pytest, httpx, ruff"
+        - "[tool.ruff] line-length = 100, target-version = 'py311'"
+
+    - path: backend/src/__init__.py
+      purpose: Package marker
+      key_contents:
+        - "Empty init file"
+
+    - path: backend/src/main.py
+      purpose: FastAPI application factory with CORS, lifespan, and router registration
+      key_contents:
+        - "create_app() -> FastAPI — registers auth_router, task_router, category_router"
+        - "lifespan() — creates DB tables on startup"
+        - "CORSMiddleware — allows frontend origin"
+
+    - path: backend/src/config.py
+      purpose: Settings via pydantic-settings (DATABASE_URL, SECRET_KEY, CORS_ORIGINS)
+      key_contents:
+        - "class Settings(BaseSettings): database_url, secret_key, cors_origins, access_token_expire"
+        - "model_config = SettingsConfigDict(env_file='.env')"
+
+    - path: backend/src/database.py
+      purpose: Async SQLAlchemy engine, session factory, Base
+      key_contents:
+        - "engine = create_async_engine(settings.database_url)"
+        - "async_session_maker = async_sessionmaker(engine)"
+        - "async def get_db() -> AsyncGenerator[AsyncSession, None]"
+        - "Base = declarative_base()"
+
+    - path: backend/src/models/user.py
+      purpose: User SQLAlchemy model
+      key_contents:
+        - "class User(Base): id (UUID), email (unique), hashed_password, full_name, created_at, updated_at"
+        - "Relationship: tasks = relationship('Task', back_populates='owner')"
+
+    - path: backend/src/models/task.py
+      purpose: Task and Category SQLAlchemy models
+      key_contents:
+        - "class Category(Base): id (UUID), name (unique), color, created_at"
+        - "class Task(Base): id (UUID), title, description, status (enum), priority (enum), due_date, category_id (FK), owner_id (FK), created_at, updated_at"
+        - "Relationships: owner, category"
+
+    - path: backend/src/schemas/user.py
+      purpose: Pydantic schemas for user endpoints
+      key_contents:
+        - "class UserCreate(BaseModel): email, password, full_name"
+        - "class UserRead(BaseModel): id, email, full_name, created_at"
+        - "class Token(BaseModel): access_token, refresh_token, token_type"
+
+    - path: backend/src/schemas/task.py
+      purpose: Pydantic schemas for task/category endpoints
+      key_contents:
+        - "class TaskCreate(BaseModel): title, description?, status?, priority?, due_date?, category_id?"
+        - "class TaskUpdate(BaseModel): title?, description?, status?, priority?, due_date?, category_id?"
+        - "class TaskRead(BaseModel): id, title, description, status, priority, due_date, category, owner_id, created_at, updated_at"
+        - "class CategoryCreate(BaseModel): name, color?"
+        - "class CategoryRead(BaseModel): id, name, color, created_at"
+
+    - path: backend/src/services/auth_service.py
+      purpose: Password hashing and JWT token creation/verification
+      key_contents:
+        - "hash_password(plain: str) -> str — bcrypt"
+        - "verify_password(plain: str, hashed: str) -> bool"
+        - "create_access_token(data: dict) -> str"
+        - "create_refresh_token(data: dict) -> str"
+        - "decode_token(token: str) -> dict"
+
+    - path: backend/src/services/task_service.py
+      purpose: Task CRUD business logic
+      key_contents:
+        - "async def create_task(db, task_in, owner_id) -> Task"
+        - "async def get_tasks(db, owner_id, status?, category_id?, skip, limit) -> list[Task]"
+        - "async def get_task(db, task_id, owner_id) -> Task | None"
+        - "async def update_task(db, task_id, task_in, owner_id) -> Task"
+        - "async def delete_task(db, task_id, owner_id) -> bool"
+
+    - path: backend/src/routers/auth.py
+      purpose: Auth endpoints (register, login, refresh, me)
+      key_contents:
+        - "POST /api/v1/auth/register — create user, return tokens"
+        - "POST /api/v1/auth/login — verify credentials, return tokens"
+        - "POST /api/v1/auth/refresh — refresh access token"
+        - "GET /api/v1/auth/me — get current user"
+
+    - path: backend/src/routers/tasks.py
+      purpose: Task CRUD endpoints
+      key_contents:
+        - "GET /api/v1/tasks — list tasks (pagination, filters)"
+        - "POST /api/v1/tasks — create task"
+        - "GET /api/v1/tasks/{id} — get task"
+        - "PATCH /api/v1/tasks/{id} — update task"
+        - "DELETE /api/v1/tasks/{id} — delete task"
+
+    - path: backend/src/routers/categories.py
+      purpose: Category CRUD endpoints
+      key_contents:
+        - "GET /api/v1/categories — list categories"
+        - "POST /api/v1/categories — create category"
+        - "DELETE /api/v1/categories/{id} — delete category"
+
+    - path: backend/src/dependencies.py
+      purpose: FastAPI dependencies (get_current_user, get_db)
+      key_contents:
+        - "async def get_current_user(token: str = Depends(oauth2_scheme), db = Depends(get_db)) -> User"
+
+    - path: backend/alembic.ini
+      purpose: Alembic configuration
+      key_contents:
+        - "sqlalchemy.url from env"
+
+    - path: backend/alembic/env.py
+      purpose: Alembic migration environment
+      key_contents:
+        - "target_metadata = Base.metadata"
+        - "run_migrations_online() with async engine"
+
+    - path: backend/tests/conftest.py
+      purpose: Pytest fixtures (async client, test DB, auth headers)
+      key_contents:
+        - "fixture: async_client — httpx.AsyncClient with test app"
+        - "fixture: test_db — in-memory SQLite session"
+        - "fixture: auth_headers — JWT headers for authenticated requests"
+
+    - path: backend/tests/test_auth.py
+      purpose: Auth endpoint tests
+      key_contents:
+        - "test_register_user — 201 with tokens"
+        - "test_register_duplicate — 409"
+        - "test_login_valid — 200 with tokens"
+        - "test_login_invalid — 401"
+        - "test_get_me — 200 with user data"
+
+    - path: backend/tests/test_tasks.py
+      purpose: Task CRUD tests
+      key_contents:
+        - "test_create_task — 201"
+        - "test_list_tasks — 200 with pagination"
+        - "test_get_task_not_found — 404"
+        - "test_update_task — 200"
+        - "test_delete_task — 204"
+        - "test_unauthorized — 401"
+
+    # ── Frontend ─────────────────────────────────────
+    - path: frontend/package.json
+      purpose: Next.js 14 project config
+      key_contents:
+        - "dependencies: next, react, react-dom, zustand, @tanstack/react-query, lucide-react"
+        - "devDependencies: typescript, tailwindcss, @types/react, eslint"
+        - "scripts: dev, build, start, lint, test"
+
+    - path: frontend/tsconfig.json
+      purpose: TypeScript config with strict mode and path aliases
+      key_contents:
+        - "strict: true"
+        - "paths: { '@/*': ['./src/*'] }"
+
+    - path: frontend/tailwind.config.ts
+      purpose: Tailwind + shadcn/ui theme configuration
+      key_contents:
+        - "content paths for app/ and components/"
+        - "shadcn/ui theme extension"
+
+    - path: frontend/src/app/layout.tsx
+      purpose: Root layout with providers (QueryClient, AuthProvider)
+      key_contents:
+        - "RootLayout wrapping children with Providers"
+        - "Inter font, metadata, global CSS"
+
+    - path: frontend/src/app/page.tsx
+      purpose: Landing page with redirect to /dashboard if authenticated
+      key_contents:
+        - "Server component, redirect logic"
+
+    - path: frontend/src/app/login/page.tsx
+      purpose: Login page with email/password form
+      key_contents:
+        - "'use client' — LoginForm with validation, error display, submit handler"
+
+    - path: frontend/src/app/register/page.tsx
+      purpose: Registration page
+      key_contents:
+        - "'use client' — RegisterForm with name, email, password, confirm password"
+
+    - path: frontend/src/app/dashboard/page.tsx
+      purpose: Main dashboard with task list, filters, and stats
+      key_contents:
+        - "'use client' — TaskDashboard composing TaskList, TaskFilters, TaskStats"
+        - "useQuery for fetching tasks"
+
+    - path: frontend/src/app/dashboard/layout.tsx
+      purpose: Dashboard layout with sidebar navigation
+      key_contents:
+        - "DashboardLayout with Sidebar, Header, main content area"
+
+    - path: frontend/src/lib/api.ts
+      purpose: Typed API client for backend endpoints
+      key_contents:
+        - "const api = { auth: { login, register, refresh, me }, tasks: { list, create, get, update, delete }, categories: { list, create, delete } }"
+        - "fetchWithAuth() — auto-attaches JWT, handles 401 refresh"
+
+    - path: frontend/src/lib/auth.ts
+      purpose: Auth store (zustand) and helpers
+      key_contents:
+        - "interface AuthState { user, tokens, login, logout, refresh }"
+        - "useAuthStore = create<AuthState>()"
+
+    - path: frontend/src/components/ui/button.tsx
+      purpose: shadcn/ui Button component
+      key_contents:
+        - "Button with variants: default, outline, ghost, destructive"
+
+    - path: frontend/src/components/task-card.tsx
+      purpose: Task card component for the task list
+      key_contents:
+        - "props: { task: Task; onStatusChange: (id: string, status: Status) => void; onDelete: (id: string) => void }"
+        - "Displays title, description, due date, priority badge, category tag, status dropdown"
+
+    - path: frontend/src/components/task-form.tsx
+      purpose: Create/edit task form with validation
+      key_contents:
+        - "props: { task?: Task; categories: Category[]; onSubmit: (data: TaskCreate) => void }"
+        - "Form fields: title, description, priority, due_date, category"
+
+    - path: frontend/src/components/task-filters.tsx
+      purpose: Filter bar for status, priority, category, search
+      key_contents:
+        - "props: { filters: TaskFilters; onChange: (filters: TaskFilters) => void }"
+
+    - path: frontend/src/types/index.ts
+      purpose: Shared TypeScript type definitions
+      key_contents:
+        - "interface User { id, email, full_name, created_at }"
+        - "interface Task { id, title, description, status, priority, due_date, category, owner_id, created_at, updated_at }"
+        - "interface Category { id, name, color, created_at }"
+        - "type TaskStatus = 'todo' | 'in_progress' | 'done'"
+        - "type TaskPriority = 'low' | 'medium' | 'high'"
+
+    # ── Root config ──────────────────────────────────
+    - path: .gitignore
+      purpose: Git ignore rules
+      key_contents:
+        - "__pycache__/, *.pyc, .env, .venv/, node_modules/, .next/, .ruff_cache/"
+
+    - path: .env.example
+      purpose: Environment variable template
+      key_contents:
+        - "DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/taskmanager"
+        - "SECRET_KEY=change-me-in-production"
+        - "CORS_ORIGINS=http://localhost:3000"
+
+    - path: README.md
+      purpose: Project documentation
+      key_contents:
+        - "Description, architecture overview, quickstart, API docs, testing"
+
+    - path: Dockerfile
+      purpose: Multi-stage Docker build for backend
+      key_contents:
+        - "Stage 1: builder with pip install"
+        - "Stage 2: slim runtime with gunicorn"
+
+    - path: docker-compose.yaml
+      purpose: Full stack services
+      key_contents:
+        - "services: backend (8000), frontend (3000), postgres (5432), redis (6379)"
+
+    - path: .github/workflows/ci.yaml
+      purpose: CI pipeline
+      key_contents:
+        - "jobs: lint (ruff), test (pytest), build (docker)"
+
+pages:
+  - path: /
+    name: Landing Page
+    components: [HeroSection, CTAButton]
+    data_source: null
+    auth: public
+
+  - path: /login
+    name: Login
+    components: [LoginForm]
+    data_source: POST /api/v1/auth/login
+    auth: public
+
+  - path: /register
+    name: Register
+    components: [RegisterForm]
+    data_source: POST /api/v1/auth/register
+    auth: public
+
+  - path: /dashboard
+    name: Dashboard
+    components: [TaskStats, TaskFilters, TaskList, TaskCard, CreateTaskButton]
+    data_source:
+      - GET /api/v1/tasks
+      - GET /api/v1/categories
+    auth: authenticated
+
+  - path: /dashboard/new
+    name: Create Task
+    components: [TaskForm]
+    data_source:
+      - POST /api/v1/tasks
+      - GET /api/v1/categories
+    auth: authenticated
+
+components:
+  - name: LoginForm
+    type: form
+    props:
+      - { name: onSuccess, type: "() => void", required: true }
+    state: [email, password, error, isLoading]
+    children: []
+
+  - name: RegisterForm
+    type: form
+    props:
+      - { name: onSuccess, type: "() => void", required: true }
+    state: [email, password, confirmPassword, fullName, error, isLoading]
+    children: []
+
+  - name: TaskCard
+    type: widget
+    props:
+      - { name: task, type: Task, required: true }
+      - { name: onStatusChange, type: "(id: string, status: TaskStatus) => void", required: true }
+      - { name: onDelete, type: "(id: string) => void", required: true }
+    state: []
+    children: [PriorityBadge, CategoryTag, StatusDropdown]
+
+  - name: TaskForm
+    type: form
+    props:
+      - { name: task, type: "Task | undefined", required: false }
+      - { name: categories, type: "Category[]", required: true }
+      - { name: onSubmit, type: "(data: TaskCreate) => void", required: true }
+    state: [title, description, priority, dueDate, categoryId, errors]
+    children: []
+
+  - name: TaskFilters
+    type: widget
+    props:
+      - { name: filters, type: TaskFilters, required: true }
+      - { name: onChange, type: "(filters: TaskFilters) => void", required: true }
+    state: []
+    children: [SearchInput, StatusSelect, PrioritySelect, CategorySelect]
+
+  - name: TaskList
+    type: widget
+    props:
+      - { name: tasks, type: "Task[]", required: true }
+      - { name: isLoading, type: boolean, required: false }
+    state: []
+    children: [TaskCard]
+
+  - name: TaskStats
+    type: widget
+    props:
+      - { name: tasks, type: "Task[]", required: true }
+    state: []
+    children: []
+
+  - name: Sidebar
+    type: nav
+    props:
+      - { name: currentPath, type: string, required: true }
+    state: [isCollapsed]
+    children: [NavLink]
+
+features:
+  - name: Authentication
+    type: auth
+    details:
+      method: JWT with refresh tokens
+      flows:
+        - Register with email + password
+        - Login returns access + refresh tokens
+        - Refresh endpoint for token rotation
+        - Protected routes require valid access token
+      security:
+        - Passwords hashed with bcrypt
+        - Access tokens expire in 15 minutes
+        - Refresh tokens expire in 7 days
+      endpoints:
+        - "POST /api/v1/auth/register - Create user account"
+        - "POST /api/v1/auth/login - Authenticate and get tokens"
+        - "POST /api/v1/auth/refresh - Refresh access token"
+        - "GET /api/v1/auth/me - Get current user profile"
+
+  - name: Task Management
+    type: crud
+    details:
+      endpoints:
+        - "GET /api/v1/tasks - List tasks with pagination and filters"
+        - "POST /api/v1/tasks - Create a new task"
+        - "GET /api/v1/tasks/{id} - Get task by ID"
+        - "PATCH /api/v1/tasks/{id} - Update task fields"
+        - "DELETE /api/v1/tasks/{id} - Delete a task"
+      business_logic:
+        - Users can only see/edit their own tasks
+        - Tasks have status (todo, in_progress, done) and priority (low, medium, high)
+        - Optional due date with overdue detection
+        - Tasks can be assigned to a category
+      validations:
+        - Title is required and max 200 chars
+        - Due date must be in the future when creating
+        - Category must exist if provided
+
+  - name: Categories
+    type: crud
+    details:
+      endpoints:
+        - "GET /api/v1/categories - List all categories"
+        - "POST /api/v1/categories - Create a category"
+        - "DELETE /api/v1/categories/{id} - Delete a category"
+      business_logic:
+        - Categories have a name and optional hex color
+        - Deleting a category sets tasks' category_id to null
+      validations:
+        - Name is required, unique, max 50 chars
+        - Color must be valid hex (#RRGGBB)
+
+data_model:
+  entities:
+    - name: User
+      fields:
+        - { name: id, type: UUID, constraints: "primary key, default uuid4" }
+        - { name: email, type: String(255), constraints: "unique, not null, indexed" }
+        - { name: hashed_password, type: String(255), constraints: "not null" }
+        - { name: full_name, type: String(100), constraints: "not null" }
+        - { name: created_at, type: DateTime, constraints: "default utcnow" }
+        - { name: updated_at, type: DateTime, constraints: "default utcnow, onupdate utcnow" }
+      relationships:
+        - { type: one-to-many, target: Task, foreign_key: "Task.owner_id" }
+
+    - name: Task
+      fields:
+        - { name: id, type: UUID, constraints: "primary key, default uuid4" }
+        - { name: title, type: String(200), constraints: "not null" }
+        - { name: description, type: Text, constraints: nullable }
+        - { name: status, type: "Enum(todo, in_progress, done)", constraints: "default todo" }
+        - { name: priority, type: "Enum(low, medium, high)", constraints: "default medium" }
+        - { name: due_date, type: DateTime, constraints: nullable }
+        - { name: owner_id, type: UUID, constraints: "FK -> User.id, not null" }
+        - { name: category_id, type: UUID, constraints: "FK -> Category.id, nullable" }
+        - { name: created_at, type: DateTime, constraints: "default utcnow" }
+        - { name: updated_at, type: DateTime, constraints: "default utcnow, onupdate utcnow" }
+      relationships:
+        - { type: many-to-one, target: User, foreign_key: owner_id }
+        - { type: many-to-one, target: Category, foreign_key: category_id }
+
+    - name: Category
+      fields:
+        - { name: id, type: UUID, constraints: "primary key, default uuid4" }
+        - { name: name, type: String(50), constraints: "unique, not null" }
+        - { name: color, type: String(7), constraints: "default '#6366f1'" }
+        - { name: created_at, type: DateTime, constraints: "default utcnow" }
+      relationships:
+        - { type: one-to-many, target: Task, foreign_key: "Task.category_id" }
+
+  migrations:
+    tool: alembic
+    seed_data: true
+
+api:
+  base_path: /api/v1
+  auth_required: true
+  rate_limiting:
+    enabled: true
+    default: "100/minute"
+  response_format:
+    envelope: true
+    shape: '{"data": <payload>, "error": null, "meta": {"page": 1, "total": 100}}'
+  documentation:
+    openapi: true
+    path: /docs
+
+testing:
+  framework: pytest
+  coverage_target: 85
+  types:
+    unit:
+      coverage_target: 85
+      patterns:
+        - Test each service function in isolation with mocked DB
+        - Test schema validation with valid and invalid data
+    integration:
+      patterns:
+        - Test each endpoint with httpx.AsyncClient and test DB
+        - Test auth flow end-to-end (register → login → access protected route)
+    e2e:
+      tool: none
+  fixtures:
+    - "async_client — httpx.AsyncClient with TestClient"
+    - "test_db — async SQLite in-memory session"
+    - "test_user — pre-created user with known credentials"
+    - "auth_headers — JWT Authorization header dict"
+
+deployment:
+  docker:
+    multi_stage: true
+    base_image: python:3.11-slim
+    compose_services:
+      - { name: backend, ports: ["8000:8000"] }
+      - { name: frontend, ports: ["3000:3000"] }
+      - { name: postgres, image: "postgres:16-alpine", ports: ["5432:5432"] }
+      - { name: redis, image: "redis:7-alpine", ports: ["6379:6379"] }
+  ci_cd:
+    provider: github-actions
+    pipeline:
+      - Checkout code
+      - Set up Python 3.11 + Node 20
+      - Install backend dependencies
+      - Run ruff check + ruff format --check
+      - Run pytest with coverage
+      - Install frontend dependencies
+      - Run npm run build
+      - Build Docker image
+  environments:
+    - name: development
+      config:
+        - "DEBUG=true"
+        - "DATABASE_URL=postgresql+asyncpg://dev:dev@localhost:5432/taskmanager_dev"
+    - name: production
+      config:
+        - "DEBUG=false"
+        - "DATABASE_URL from secrets"
+
+standards:
+  formatting: ruff
+  linting: ruff
+  typing: mypy
+  docstrings: google
+  git:
+    commit_convention: conventional
+    pre_commit_hooks: true
+
+security:
+  authentication: required
+  authorization: rbac
+  input_validation: strict
+  secrets: environment_variables_only
+  cors_origins:
+    - "http://localhost:3000"
+  dependency_scanning: github-dependabot
+
+quality_gates:
+  - Zero syntax errors
+  - Zero error-severity code smells
+  - All tests pass
+  - Frontend builds without errors
+  - Docker image builds successfully
