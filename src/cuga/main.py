@@ -155,98 +155,37 @@ async def _run_setup(args: argparse.Namespace) -> tuple:
         args: Parsed CLI arguments (needs ``tools``, ``output``).
 
     Returns:
-        Tuple of ``(agent, workspace_root)`` where *agent* is a
-        ready-to-use ``CugaAgent`` and *workspace_root* is the
-        resolved output directory path string.
+        Tuple of ``(agent, workspace_root, mcp_result)`` where *agent* is a
+        ready-to-use ``CugaAgent``, *workspace_root* is the resolved output
+        directory path string, and *mcp_result* is the bootstrap result
+        containing the manager/registry for health checks.
     """
-    mcp_servers_path = str(Path(args.tools).resolve())
-    os.environ.setdefault("MCP_SERVERS_FILE", mcp_servers_path)
-
-    # Lazy-import after env vars are set so Dynaconf picks them up
-    from cuga.backend.tools_env.registry.config.config_loader import (
-        load_service_configs,
-    )
-    from cuga.backend.tools_env.registry.mcp_manager.mcp_manager import MCPManager
-    from cuga.backend.tools_env.registry.registry.api_registry import ApiRegistry
-    from cuga.mcp_direct_tools import create_tools_from_mcp_manager
+    from cuga.mcp_bootstrap import bootstrap_mcp
+    from cuga.mcp_resilience import wrap_tools_with_retry
     from cuga.sdk import CugaAgent
 
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
     workspace_root = str(output_dir.resolve())
 
-    # ── Load MCP tools in-process from the YAML config ──────────────
-    services = load_service_configs(mcp_servers_path)
-
-    # Resolve ENV: references in auth values (e.g. "ENV:GITHUB_TOKEN")
-    for svc in services.values():
-        if svc.auth and isinstance(svc.auth.value, str) and svc.auth.value.startswith("ENV:"):
-            env_key = svc.auth.value[4:]
-            resolved = os.environ.get(env_key, "")
-            if not resolved:
-                logger.warning("Auth env var {} not set for {}", env_key, svc.name)
-            svc.auth.value = resolved
-
-    # Ensure the filesystem MCP is scoped to the resolved output directory
-    if "filesystem" in services and services["filesystem"].args:
-        fs_args = services["filesystem"].args
-        # Replace the last arg (./output or relative path) with absolute output dir
-        fs_args[-1] = workspace_root
-        logger.info("Filesystem MCP scoped to {}", workspace_root)
-
-    manager = MCPManager(config=services)
-    registry = ApiRegistry(client=manager)
-
-    # Start MCP servers — individual server failures are handled gracefully
-    # by MCPManager (logged + skipped), so we only retry on catastrophic failures.
-    try:
-        await registry.start_servers()
-    except Exception as exc:
-        logger.error("Failed to start MCP servers: {}", exc)
-        raise
-
-    # Verify each server is responsive by checking it returned tools
-    live_servers = list(manager.tools_by_server.keys())
-    failed = list(getattr(manager, "initialization_errors", {}).keys())
-    logger.info(
-        "MCP servers: {} live ({}), {} failed ({})",
-        len(live_servers),
-        ", ".join(live_servers) if live_servers else "none",
-        len(failed),
-        ", ".join(failed) if failed else "none",
+    mcp_result = await bootstrap_mcp(
+        mcp_servers_path=args.tools,
+        workspace_root=workspace_root,
     )
 
-    if not live_servers:
-        logger.error("No MCP servers connected — cannot proceed")
-        sys.exit(1)
+    # Wrap tools with retry logic for resilience against transient failures
+    wrap_tools_with_retry(mcp_result.tools, max_retries=2)
 
-    # Log any servers that failed to connect
-    if hasattr(manager, "initialization_errors") and manager.initialization_errors:
-        for srv_name, err in manager.initialization_errors.items():
-            logger.warning("MCP server '{}' unavailable: {}", srv_name, err.get("error", "unknown"))
+    # Optionally create a multi-agent supervisor instead of a single agent
+    from cuga.supervisor_strategy import create_build_supervisor, is_supervisor_enabled
 
-    # Create tools that call MCP servers *directly* via the manager,
-    # bypassing the registry HTTP proxy (which isn't running locally).
-    all_tools = create_tools_from_mcp_manager(manager)
+    if is_supervisor_enabled():
+        logger.info("Supervisor mode enabled — creating multi-agent build supervisor")
+        agent = create_build_supervisor(tools=mcp_result.tools)
+    else:
+        agent = CugaAgent(tools=mcp_result.tools)
 
-    # Add native shell execution tool (replaces desktop-commander MCP)
-    from cuga.shell_tool import create_shell_tool
-
-    os.environ["CUGA_OUTPUT_DIR"] = workspace_root
-    all_tools.append(create_shell_tool())
-
-    logger.info(
-        "Loaded {} tools ({} MCP servers + shell)",
-        len(all_tools),
-        len(manager.tools_by_server),
-    )
-    for t in all_tools:
-        logger.debug("  Tool: {}", t.name)
-
-    # Build the agent with the loaded MCP tools
-    agent = CugaAgent(tools=all_tools)
-
-    return agent, workspace_root
+    return agent, workspace_root, mcp_result
 
 
 async def _run(args: argparse.Namespace) -> None:
@@ -258,7 +197,7 @@ async def _run(args: argparse.Namespace) -> None:
     logger.info("Policy: {}", args.policy)
     logger.info("Output: {}", Path(args.output).resolve())
 
-    agent, workspace_root = await _run_setup(args)
+    agent, workspace_root, mcp_result = await _run_setup(args)
     output_dir = Path(args.output)
 
     # ── Run the build loop (build→validate→feedback→retry) ─────
@@ -278,6 +217,8 @@ async def _run(args: argparse.Namespace) -> None:
         config=loop_config,
         policy_text=policy_text,
         workspace_root=workspace_root,
+        mcp_manager=mcp_result.manager,
+        mcp_registry=mcp_result.registry,
     )
 
     build_result = await build_loop.run()

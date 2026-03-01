@@ -62,27 +62,17 @@ class FakeAgent:
 
         if self.call_count <= self.fail_first_n:
             # Write a file with a syntax error so validation fails
-            (self.project_dir / "bad.py").write_text(
-                "def broken(\n", encoding="utf-8"
-            )
+            (self.project_dir / "bad.py").write_text("def broken(\n", encoding="utf-8")
             # Still write .gitignore and README to avoid missing-required failures
-            (self.project_dir / ".gitignore").write_text(
-                "__pycache__/\n", encoding="utf-8"
-            )
-            (self.project_dir / "README.md").write_text(
-                "# Test\n", encoding="utf-8"
-            )
+            (self.project_dir / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+            (self.project_dir / "README.md").write_text("# Test\n", encoding="utf-8")
         else:
             # Clean output — remove any previous bad file
             bad_file = self.project_dir / "bad.py"
             if bad_file.exists():
                 bad_file.unlink()
-            (self.project_dir / ".gitignore").write_text(
-                "__pycache__/\n.env\n", encoding="utf-8"
-            )
-            (self.project_dir / "README.md").write_text(
-                "# My Project\n", encoding="utf-8"
-            )
+            (self.project_dir / ".gitignore").write_text("__pycache__/\n.env\n", encoding="utf-8")
+            (self.project_dir / "README.md").write_text("# My Project\n", encoding="utf-8")
             (self.project_dir / "main.py").write_text(
                 'from __future__ import annotations\n\n\ndef main() -> str:\n    return "hello"\n',
                 encoding="utf-8",
@@ -240,9 +230,7 @@ class TestBuildFeedbackPrompt:
 
     def test_includes_syntax_errors(self) -> None:
         validation: dict[str, Any] = {
-            "syntax_errors": [
-                {"file": "app.py", "line": 10, "issue": "unexpected EOF"}
-            ],
+            "syntax_errors": [{"file": "app.py", "line": 10, "issue": "unexpected EOF"}],
             "smells": [],
             "lint_passed": True,
             "missing_spec_files": [],
@@ -302,8 +290,7 @@ class TestBuildFeedbackPrompt:
     def test_respects_max_errors_cap(self) -> None:
         validation: dict[str, Any] = {
             "syntax_errors": [
-                {"file": f"f{i}.py", "line": 1, "issue": f"err{i}"}
-                for i in range(50)
+                {"file": f"f{i}.py", "line": 1, "issue": f"err{i}"} for i in range(50)
             ],
             "smells": [],
             "lint_passed": True,
@@ -403,9 +390,7 @@ class TestBuildLoop:
     """Integration tests using FakeAgent."""
 
     @pytest.mark.asyncio()
-    async def test_passes_on_first_try(
-        self, tmp_path: Path, spec: dict[str, Any]
-    ) -> None:
+    async def test_passes_on_first_try(self, tmp_path: Path, spec: dict[str, Any]) -> None:
         """Agent produces clean output on first iteration — loop stops at 1."""
         project_dir = tmp_path / "test-project"
         agent = FakeAgent(project_dir, fail_first_n=0)
@@ -428,9 +413,7 @@ class TestBuildLoop:
         assert len(result.iterations) == 1
 
     @pytest.mark.asyncio()
-    async def test_retries_on_failure(
-        self, tmp_path: Path, spec: dict[str, Any]
-    ) -> None:
+    async def test_retries_on_failure(self, tmp_path: Path, spec: dict[str, Any]) -> None:
         """Agent fails first iteration, succeeds on second."""
         project_dir = tmp_path / "test-project"
         agent = FakeAgent(project_dir, fail_first_n=1)
@@ -454,9 +437,7 @@ class TestBuildLoop:
         assert result.iterations[1].passed is True
 
     @pytest.mark.asyncio()
-    async def test_feedback_injected_on_retry(
-        self, tmp_path: Path, spec: dict[str, Any]
-    ) -> None:
+    async def test_feedback_injected_on_retry(self, tmp_path: Path, spec: dict[str, Any]) -> None:
         """On retry, the agent receives an error-feedback prompt, not the original."""
         project_dir = tmp_path / "test-project"
         agent = FakeAgent(project_dir, fail_first_n=1)
@@ -481,9 +462,7 @@ class TestBuildLoop:
         assert "Fix" in agent.prompts[1]
 
     @pytest.mark.asyncio()
-    async def test_max_iterations_exhausted(
-        self, tmp_path: Path, spec: dict[str, Any]
-    ) -> None:
+    async def test_max_iterations_exhausted(self, tmp_path: Path, spec: dict[str, Any]) -> None:
         """When all iterations fail, returns passed=False."""
         project_dir = tmp_path / "test-project"
         agent = FakeAgent(project_dir, fail_first_n=99)
@@ -506,9 +485,7 @@ class TestBuildLoop:
         assert all(not it.passed for it in result.iterations)
 
     @pytest.mark.asyncio()
-    async def test_total_elapsed_tracked(
-        self, tmp_path: Path, spec: dict[str, Any]
-    ) -> None:
+    async def test_total_elapsed_tracked(self, tmp_path: Path, spec: dict[str, Any]) -> None:
         """Total elapsed time is reasonable (non-zero, positive)."""
         project_dir = tmp_path / "test-project"
         agent = FakeAgent(project_dir, fail_first_n=0)
@@ -529,9 +506,7 @@ class TestBuildLoop:
         assert result.iterations[0].elapsed_seconds >= 0
 
     @pytest.mark.asyncio()
-    async def test_agent_exception_handled(
-        self, tmp_path: Path, spec: dict[str, Any]
-    ) -> None:
+    async def test_agent_exception_handled(self, tmp_path: Path, spec: dict[str, Any]) -> None:
         """If the agent raises, the iteration is recorded as failed and loop continues."""
         project_dir = tmp_path / "test-project"
 
@@ -569,9 +544,7 @@ class TestBuildLoop:
         assert agent.call_count >= 2
 
     @pytest.mark.asyncio()
-    async def test_catalog_recording(
-        self, tmp_path: Path, spec: dict[str, Any]
-    ) -> None:
+    async def test_catalog_recording(self, tmp_path: Path, spec: dict[str, Any]) -> None:
         """When record_to_catalog is True, build_catalog.record_build is called."""
         project_dir = tmp_path / "test-project"
         catalog_dir = tmp_path / "catalog"

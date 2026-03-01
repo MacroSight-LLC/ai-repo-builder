@@ -220,10 +220,7 @@ def _build_feedback_prompt(
     if migrations.get("has_orm") and not migrations.get("has_migrations"):
         orm_type = migrations.get("orm_type", "unknown")
         lines.append(f"### Missing Database Migrations ({orm_type})")
-        lines.append(
-            "- ORM detected but no migration files found. "
-            "Generate initial migrations."
-        )
+        lines.append("- ORM detected but no migration files found. Generate initial migrations.")
         lines.append("")
 
     lines.append(
@@ -290,6 +287,8 @@ class BuildLoop:
         config: BuildLoopConfig | None = None,
         policy_text: str | None = None,
         workspace_root: str | None = None,
+        mcp_manager: Any | None = None,
+        mcp_registry: Any | None = None,
     ) -> None:
         self.spec = spec
         self.agent = agent
@@ -297,6 +296,8 @@ class BuildLoop:
         self.config = config or BuildLoopConfig()
         self.policy_text = policy_text
         self.workspace_root = workspace_root or str(project_dir.resolve())
+        self._mcp_manager = mcp_manager
+        self._mcp_registry = mcp_registry
         self._iterations: list[IterationRecord] = []
 
     # ── Public API ─────────────────────────────────────────────
@@ -421,6 +422,9 @@ class BuildLoop:
                     iter_elapsed,
                 )
 
+                # ── MCP health check before retry ──────────────
+                await self._health_check_between_iterations()
+
         total_elapsed = time.time() - total_t0
 
         final_passed = bool(self._iterations and self._iterations[-1].passed)
@@ -472,11 +476,34 @@ class BuildLoop:
 
             new_lessons = mine_lessons()
             if new_lessons:
-                logger.info(
-                    "Auto-mined {} new catalog lessons", len(new_lessons)
-                )
+                logger.info("Auto-mined {} new catalog lessons", len(new_lessons))
         except Exception:
             logger.debug("Catalog lesson mining skipped (non-critical)", exc_info=True)
+
+    async def _health_check_between_iterations(self) -> None:
+        """Run MCP health checks between failed iterations (best-effort).
+
+        If the manager and registry are available, checks server health
+        and attempts to reconnect any dead servers before the next retry.
+        """
+        if self._mcp_manager is None:
+            return
+
+        try:
+            from cuga.mcp_resilience import (
+                health_check_servers,
+                reconnect_failed_servers,
+            )
+
+            report = await health_check_servers(self._mcp_manager)
+            if report.any_unhealthy and self._mcp_registry is not None:
+                await reconnect_failed_servers(
+                    self._mcp_manager,
+                    self._mcp_registry,
+                    server_names=report.unhealthy_names,
+                )
+        except Exception:
+            logger.debug("MCP health check skipped (non-critical)", exc_info=True)
 
 
 # ── CLI entry point (replaces one-click.sh logic) ─────────────
@@ -493,7 +520,6 @@ async def _cli_main(argv: list[str] | None = None) -> None:
     """
     import argparse
     import json
-    import os
     import sys
     from datetime import UTC, datetime
 
@@ -548,56 +574,20 @@ async def _cli_main(argv: list[str] | None = None) -> None:
     project_name = spec.get("name", "project")
     project_dir = output_dir / project_name
 
-    # ── Bootstrap MCP tools + CugaAgent (same as main.py) ──────
-    mcp_servers_path = str(Path(args.tools).resolve())
-    os.environ.setdefault("MCP_SERVERS_FILE", mcp_servers_path)
-
-    from cuga.backend.tools_env.registry.config.config_loader import (
-        load_service_configs,
-    )
-    from cuga.backend.tools_env.registry.mcp_manager.mcp_manager import MCPManager
-    from cuga.backend.tools_env.registry.registry.api_registry import ApiRegistry
-    from cuga.mcp_direct_tools import create_tools_from_mcp_manager
+    # ── Bootstrap MCP tools + CugaAgent via shared module ─────
+    from cuga.mcp_bootstrap import bootstrap_mcp
+    from cuga.mcp_resilience import wrap_tools_with_retry
     from cuga.sdk import CugaAgent
-    from cuga.shell_tool import create_shell_tool
 
-    services = load_service_configs(mcp_servers_path)
+    mcp_result = await bootstrap_mcp(
+        mcp_servers_path=args.tools,
+        workspace_root=workspace_root,
+    )
 
-    # Resolve ENV: auth references
-    for svc in services.values():
-        if svc.auth and isinstance(svc.auth.value, str) and svc.auth.value.startswith("ENV:"):
-            env_key = svc.auth.value[4:]
-            resolved = os.environ.get(env_key, "")
-            if not resolved:
-                logger.warning("Auth env var {} not set for {}", env_key, svc.name)
-            svc.auth.value = resolved
+    wrap_tools_with_retry(mcp_result.tools, max_retries=2)
+    logger.info("Loaded {} tools", len(mcp_result.tools))
 
-    # Scope filesystem MCP to output directory
-    if "filesystem" in services and services["filesystem"].args:
-        services["filesystem"].args[-1] = workspace_root
-        logger.info("Filesystem MCP scoped to {}", workspace_root)
-
-    manager = MCPManager(config=services)
-    registry = ApiRegistry(client=manager)
-
-    try:
-        await registry.start_servers()
-    except Exception as exc:
-        logger.error("Failed to start MCP servers: {}", exc)
-        raise
-
-    live = list(manager.tools_by_server.keys())
-    if not live:
-        logger.error("No MCP servers connected — cannot proceed")
-        sys.exit(1)
-    logger.info("MCP servers live: {}", ", ".join(live))
-
-    all_tools = create_tools_from_mcp_manager(manager)
-    os.environ["CUGA_OUTPUT_DIR"] = workspace_root
-    all_tools.append(create_shell_tool())
-    logger.info("Loaded {} tools", len(all_tools))
-
-    agent = CugaAgent(tools=all_tools)
+    agent = CugaAgent(tools=mcp_result.tools)
 
     # ── Run the loop ────────────────────────────────────────────
     loop_config = BuildLoopConfig(
@@ -612,6 +602,8 @@ async def _cli_main(argv: list[str] | None = None) -> None:
         config=loop_config,
         policy_text=policy_text,
         workspace_root=workspace_root,
+        mcp_manager=mcp_result.manager,
+        mcp_registry=mcp_result.registry,
     )
 
     result = await build_loop.run()

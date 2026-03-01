@@ -160,9 +160,7 @@ def _inject_github_config(spec: dict, args: argparse.Namespace) -> dict:
 
     owner = args.github_owner or os.environ.get("GITHUB_OWNER", "")
     if not owner:
-        logger.warning(
-            "--github set but no owner specified (use --github-owner or $GITHUB_OWNER)"
-        )
+        logger.warning("--github set but no owner specified (use --github-owner or $GITHUB_OWNER)")
 
     visibility = "public" if getattr(args, "public", False) else "private"
     spec["github"] = {
@@ -302,9 +300,8 @@ async def build_project(
     Records build results to the catalog automatically.
     """
     from cuga.build_loop import BuildLoop, BuildLoopConfig
-    from cuga.main import _load_policy
+    from cuga.main import _load_policy, _run_setup
     from cuga.main import _parse_args as main_parse_args
-    from cuga.main import _run_setup
 
     # Save spec to a working file
     spec_file = Path(output_dir) / "_active_spec.yaml"
@@ -329,7 +326,7 @@ async def build_project(
     args = main_parse_args(cli_args)
 
     # Bootstrap MCP tools + agent via the shared setup helper
-    agent, workspace_root = await _run_setup(args)
+    agent, workspace_root, _mcp = await _run_setup(args)
 
     policy_text = _load_policy(args.policy)
 
@@ -428,9 +425,7 @@ def _print_build_success(spec: dict, output_dir: str) -> None:
     gh = spec.get("github", {})
     if gh.get("create_repo"):
         owner = gh.get("owner") or os.environ.get("GITHUB_OWNER", "")
-        print(
-            f"\n✅ Project built and pushed! https://github.com/{owner}/{project_name}"
-        )
+        print(f"\n✅ Project built and pushed! https://github.com/{owner}/{project_name}")
     else:
         print(f"\n✅ Project built! Check: {output_dir}/{project_name}/")
 

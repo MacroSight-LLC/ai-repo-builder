@@ -106,14 +106,8 @@ def record_build(
         # Map to canonical pattern names
         # NOTE: Check hardcoded BEFORE stub — "Hardcoded password" contains "pass"
         if "hardcoded" in issue_lower or "secret" in issue_lower:
-            smell_counts["hardcoded_secret"] = (
-                smell_counts.get("hardcoded_secret", 0) + 1
-            )
-        elif (
-            "stub" in issue_lower
-            or "pass statement" in issue_lower
-            or "NotImplemented" in issue
-        ):
+            smell_counts["hardcoded_secret"] = smell_counts.get("hardcoded_secret", 0) + 1
+        elif "stub" in issue_lower or "pass statement" in issue_lower or "NotImplemented" in issue:
             smell_counts["stub_function"] = smell_counts.get("stub_function", 0) + 1
         elif "bare except" in issue_lower:
             smell_counts["bare_except"] = smell_counts.get("bare_except", 0) + 1
@@ -135,9 +129,7 @@ def record_build(
         "files_total": validation.get("files_total", validation.get("file_count", 0)),
         "lines_total": validation.get("lines_total", 0),
         "syntax_errors": len(validation.get("syntax_errors", [])),
-        "lint_passed": validation.get(
-            "lint_passed", validation.get("ruff_exit_code", -1) == 0
-        ),
+        "lint_passed": validation.get("lint_passed", validation.get("ruff_exit_code", -1) == 0),
         "smell_counts": smell_counts,
         "total_smells": sum(smell_counts.values()),
         "missing_spec_files": len(
@@ -212,11 +204,7 @@ def load_optimizations(catalog_dir: Path | None = None) -> dict:
 
     try:
         data = yaml.safe_load(opt_file.read_text(encoding="utf-8"))
-        return (
-            data
-            if isinstance(data, dict)
-            else {"global": [], "by_stack": {}, "by_pattern": {}}
-        )
+        return data if isinstance(data, dict) else {"global": [], "by_stack": {}, "by_pattern": {}}
     except yaml.YAMLError:
         logger.warning("Failed to parse optimizations.yaml — using defaults")
         return {"global": [], "by_stack": {}, "by_pattern": {}}
@@ -253,11 +241,7 @@ def get_lessons_for_prompt(
         Empty string if no lessons found.
     """
     opts = load_optimizations(catalog_dir)
-    if (
-        not opts.get("global")
-        and not opts.get("by_stack")
-        and not opts.get("by_pattern")
-    ):
+    if not opts.get("global") and not opts.get("by_stack") and not opts.get("by_pattern"):
         return ""
 
     lessons: list[tuple[str, str, str]] = []  # (severity, lesson, context)

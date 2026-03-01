@@ -159,9 +159,7 @@ def catalog_with_opts(catalog_dir: Path) -> Path:
             },
         },
     }
-    (catalog_dir / "optimizations.yaml").write_text(
-        yaml.dump(opts, default_flow_style=False)
-    )
+    (catalog_dir / "optimizations.yaml").write_text(yaml.dump(opts, default_flow_style=False))
     return catalog_dir
 
 
@@ -170,9 +168,7 @@ def catalog_with_opts(catalog_dir: Path) -> Path:
 
 class TestRecordBuild:
     def test_creates_history_file(self, catalog_dir: Path) -> None:
-        path = record_build(
-            SAMPLE_SPEC, SAMPLE_VALIDATION_PASS, 25.0, catalog_dir=catalog_dir
-        )
+        path = record_build(SAMPLE_SPEC, SAMPLE_VALIDATION_PASS, 25.0, catalog_dir=catalog_dir)
         assert path.exists()
         assert path.name == "build_history.jsonl"
 
@@ -204,9 +200,7 @@ class TestRecordBuild:
         assert smells.get("bare_except", 0) >= 1
 
     def test_updates_pattern_counts(self, catalog_with_opts: Path) -> None:
-        record_build(
-            SAMPLE_SPEC, SAMPLE_VALIDATION_FAIL, 30.0, catalog_dir=catalog_with_opts
-        )
+        record_build(SAMPLE_SPEC, SAMPLE_VALIDATION_FAIL, 30.0, catalog_dir=catalog_with_opts)
 
         opts = yaml.safe_load((catalog_with_opts / "optimizations.yaml").read_text())
         assert opts["by_pattern"]["stub_function"]["auto_count"] >= 1
@@ -277,21 +271,15 @@ class TestGetLessonsForPrompt:
         lessons = get_lessons_for_prompt(SAMPLE_SPEC, catalog_dir=catalog_with_opts)
         assert "specific exceptions" in lessons.lower() or "Catch" in lessons
 
-    def test_includes_critical_patterns_even_if_zero_count(
-        self, catalog_with_opts: Path
-    ) -> None:
+    def test_includes_critical_patterns_even_if_zero_count(self, catalog_with_opts: Path) -> None:
         # stub_function is critical severity, should appear even with auto_count=0
         lessons = get_lessons_for_prompt(SAMPLE_SPEC, catalog_dir=catalog_with_opts)
         assert "Never write pass" in lessons
 
     def test_respects_max_lessons(self, catalog_with_opts: Path) -> None:
-        lessons = get_lessons_for_prompt(
-            SAMPLE_SPEC, max_lessons=2, catalog_dir=catalog_with_opts
-        )
+        lessons = get_lessons_for_prompt(SAMPLE_SPEC, max_lessons=2, catalog_dir=catalog_with_opts)
         # Should have at most 2 lesson entries (plus header lines)
-        lesson_lines = [
-            ln for ln in lessons.splitlines() if ln.startswith(("🔴", "🟡", "💡"))
-        ]
+        lesson_lines = [ln for ln in lessons.splitlines() if ln.startswith(("🔴", "🟡", "💡"))]
         assert len(lesson_lines) <= 2
 
     def test_has_header(self, catalog_with_opts: Path) -> None:
@@ -506,9 +494,7 @@ class TestMineLessons:
             ],
         }
         for _ in range(5):
-            record_build(
-                SAMPLE_SPEC, validation, 10.0, catalog_dir=catalog_with_opts
-            )
+            record_build(SAMPLE_SPEC, validation, 10.0, catalog_dir=catalog_with_opts)
 
         new = mine_lessons(min_occurrences=3, catalog_dir=catalog_with_opts)
         # All patterns already exist in catalog_with_opts — nothing to add
@@ -580,13 +566,15 @@ class TestMineLessons:
         # Write history manually with an unknown pattern
         history_file = catalog_dir / "build_history.jsonl"
         for _ in range(5):
-            line = json.dumps({
-                "project_name": "test",
-                "stack": "python/fastapi",
-                "passed": False,
-                "smell_counts": {"unknown_weird_pattern": 10},
-                "timestamp": "2025-01-01T00:00:00Z",
-            })
+            line = json.dumps(
+                {
+                    "project_name": "test",
+                    "stack": "python/fastapi",
+                    "passed": False,
+                    "smell_counts": {"unknown_weird_pattern": 10},
+                    "timestamp": "2025-01-01T00:00:00Z",
+                }
+            )
             with history_file.open("a") as f:
                 f.write(line + "\n")
 
@@ -603,9 +591,7 @@ class TestPruneStaleLessons:
     def test_no_pruning_below_min_builds(self, catalog_with_opts: Path) -> None:
         """Should not prune if fewer than min_builds exist."""
         # Record just 1 build (min_builds=10 default)
-        record_build(
-            SAMPLE_SPEC, SAMPLE_VALIDATION_PASS, 10.0, catalog_dir=catalog_with_opts
-        )
+        record_build(SAMPLE_SPEC, SAMPLE_VALIDATION_PASS, 10.0, catalog_dir=catalog_with_opts)
         pruned = prune_stale_lessons(catalog_dir=catalog_with_opts)
         assert pruned == []
 
@@ -630,9 +616,7 @@ class TestPruneStaleLessons:
         assert len(opts["global"]) == 2
         assert "python/fastapi" in opts.get("by_stack", {})
 
-    def test_prunes_auto_lesson_not_seen_recently(
-        self, catalog_dir: Path
-    ) -> None:
+    def test_prunes_auto_lesson_not_seen_recently(self, catalog_dir: Path) -> None:
         """Auto lessons with no recent occurrences should be pruned."""
         # Create an optimizations file with an auto lesson
         opts = {
@@ -647,9 +631,7 @@ class TestPruneStaleLessons:
                 },
             },
         }
-        (catalog_dir / "optimizations.yaml").write_text(
-            yaml.dump(opts, default_flow_style=False)
-        )
+        (catalog_dir / "optimizations.yaml").write_text(yaml.dump(opts, default_flow_style=False))
 
         # Record builds that DON'T have this pattern (old pattern)
         for _ in range(12):
@@ -685,9 +667,7 @@ class TestPruneStaleLessons:
                 },
             },
         }
-        (catalog_dir / "optimizations.yaml").write_text(
-            yaml.dump(opts, default_flow_style=False)
-        )
+        (catalog_dir / "optimizations.yaml").write_text(yaml.dump(opts, default_flow_style=False))
 
         # Record builds that DO include this pattern
         validation = {
@@ -720,12 +700,8 @@ class TestPruneStaleLessons:
     def test_empty_pattern_section_no_crash(self, catalog_dir: Path) -> None:
         """Should not crash when by_pattern is empty."""
         opts = {"global": [], "by_stack": {}, "by_pattern": {}}
-        (catalog_dir / "optimizations.yaml").write_text(
-            yaml.dump(opts, default_flow_style=False)
-        )
+        (catalog_dir / "optimizations.yaml").write_text(yaml.dump(opts, default_flow_style=False))
         for _ in range(12):
-            record_build(
-                SAMPLE_SPEC, SAMPLE_VALIDATION_PASS, 10.0, catalog_dir=catalog_dir
-            )
+            record_build(SAMPLE_SPEC, SAMPLE_VALIDATION_PASS, 10.0, catalog_dir=catalog_dir)
         pruned = prune_stale_lessons(min_builds=10, catalog_dir=catalog_dir)
         assert pruned == []

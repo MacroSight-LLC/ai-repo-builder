@@ -207,9 +207,7 @@ class GateConfig:
         Returns:
             A new ``GateConfig`` with matching stack overrides merged in.
         """
-        override = next(
-            (o for o in self.stack_overrides if o.stack == stack), None
-        )
+        override = next((o for o in self.stack_overrides if o.stack == stack), None)
         if override is None:
             return self
 
@@ -308,9 +306,7 @@ class QualityGate:
         ok = syntax_count <= cfg.max_syntax_errors
         checks["syntax_errors"] = ok
         if not ok:
-            reasons.append(
-                f"Syntax errors: {syntax_count} (max {cfg.max_syntax_errors})"
-            )
+            reasons.append(f"Syntax errors: {syntax_count} (max {cfg.max_syntax_errors})")
 
         # ── Error-severity smells ───────────────────────────
         smells = validation.get("smells", [])
@@ -318,9 +314,7 @@ class QualityGate:
         ok = len(error_smells) <= cfg.max_error_smells
         checks["error_smells"] = ok
         if not ok:
-            reasons.append(
-                f"Error smells: {len(error_smells)} (max {cfg.max_error_smells})"
-            )
+            reasons.append(f"Error smells: {len(error_smells)} (max {cfg.max_error_smells})")
 
         # ── Warning-severity smells ─────────────────────────
         if cfg.max_warning_smells >= 0:
@@ -328,9 +322,7 @@ class QualityGate:
             ok = len(warn_smells) <= cfg.max_warning_smells
             checks["warning_smells"] = ok
             if not ok:
-                reasons.append(
-                    f"Warning smells: {len(warn_smells)} (max {cfg.max_warning_smells})"
-                )
+                reasons.append(f"Warning smells: {len(warn_smells)} (max {cfg.max_warning_smells})")
         else:
             checks["warning_smells"] = True
 

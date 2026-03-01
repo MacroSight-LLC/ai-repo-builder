@@ -1,58 +1,68 @@
 import asyncio
-from datetime import datetime
+import json
+import os
 import platform
 import re
 import shutil
-import os
 import subprocess
-import uuid
-import yaml
-import httpx
-import json
-from contextlib import asynccontextmanager
-from typing import List, Dict, Any, Union, Optional
-from pathlib import Path
 import traceback
-from pydantic import BaseModel, ValidationError
-from fastapi import Depends, FastAPI, Request, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, RedirectResponse
+import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import httpx
+import yaml
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 from loguru import logger
+from pydantic import BaseModel, ValidationError
 
 from cuga.backend.activity_tracker.tracker import ActivityTracker
-from cuga.configurations.instructions_manager import InstructionsManager
-from cuga.backend.tools_env.registry.utils.api_utils import get_agent_id, get_apps, get_apis
-from cuga.cli import start_extension_browser_if_configured
 from cuga.backend.browser_env.browser.extension_env_async import ExtensionEnv
+from cuga.backend.browser_env.browser.gym_env_async import BrowserEnvGymAsync
 from cuga.backend.browser_env.browser.gym_obs.http_stream_comm import (
     ChromeExtensionCommunicatorHTTP,
     ChromeExtensionCommunicatorProtocol,
 )
-from cuga.backend.cuga_graph.nodes.browser.action_agent.tools.tools import format_tools
+from cuga.backend.browser_env.browser.open_ended_async import OpenEndedTaskAsync
 from cuga.backend.cuga_graph.graph import DynamicAgentGraph
+from cuga.backend.cuga_graph.nodes.browser.action_agent.tools.tools import format_tools
+from cuga.backend.cuga_graph.nodes.human_in_the_loop.followup_model import ActionResponse
+from cuga.backend.cuga_graph.state.agent_state import AgentState, default_state
+from cuga.backend.cuga_graph.utils.agent_loop import (
+    AgentLoop,
+    AgentLoopAnswer,
+    OutputFormat,
+    StreamEvent,
+)
 from cuga.backend.cuga_graph.utils.controller import AgentRunner
 from cuga.backend.cuga_graph.utils.event_porcessors.action_agent_event_processor import (
     ActionAgentEventProcessor,
-)
-from cuga.backend.cuga_graph.nodes.human_in_the_loop.followup_model import ActionResponse
-from cuga.backend.cuga_graph.state.agent_state import AgentState, default_state
-from cuga.backend.browser_env.browser.gym_env_async import BrowserEnvGymAsync
-from cuga.backend.browser_env.browser.open_ended_async import OpenEndedTaskAsync
-from cuga.backend.cuga_graph.utils.agent_loop import AgentLoop, AgentLoopAnswer, StreamEvent, OutputFormat
-from cuga.backend.tools_env.registry.utils.api_utils import get_registry_base_url
-from cuga.config import (
-    get_app_name_from_url,
-    get_user_data_path,
-    settings,
-    PACKAGE_ROOT,
-    LOGGING_DIR,
-    TRACES_DIR,
 )
 from cuga.backend.server import manage_routes
 from cuga.backend.server.auth import require_auth
 from cuga.backend.server.auth.models import UserInfo
 from cuga.backend.server.conversation_history import get_conversation_db
+from cuga.backend.tools_env.registry.utils.api_utils import (
+    get_agent_id,
+    get_apis,
+    get_apps,
+    get_registry_base_url,
+)
+from cuga.cli import start_extension_browser_if_configured
+from cuga.config import (
+    LOGGING_DIR,
+    PACKAGE_ROOT,
+    TRACES_DIR,
+    get_app_name_from_url,
+    get_user_data_path,
+    settings,
+)
+from cuga.configurations.instructions_manager import InstructionsManager
 
 # Default user ID for conversation history
 DEFAULT_USER_ID = "default_user"
@@ -66,7 +76,12 @@ except ImportError:
         CallbackHandler = None
 
 # Import embedded assets with feature flag
-USE_EMBEDDED_ASSETS = os.getenv("USE_EMBEDDED_ASSETS", "false").lower() in ("true", "1", "yes", "on")
+USE_EMBEDDED_ASSETS = os.getenv("USE_EMBEDDED_ASSETS", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+    "on",
+)
 
 if USE_EMBEDDED_ASSETS:
     try:
@@ -80,8 +95,8 @@ else:
     print("📁 Using file system assets (embedded assets disabled)")
 
 try:
-    from agent_analytics.instrumentation.configs import OTLPCollectorConfig
     from agent_analytics.instrumentation import agent_analytics_sdk
+    from agent_analytics.instrumentation.configs import OTLPCollectorConfig
 except ImportError as e:
     logger.warning(f"Failed to import agent_analytics: {e}")
     OTLPCollectorConfig = None
@@ -92,7 +107,9 @@ except ImportError as e:
 # Path constants
 TRACE_LOG_PATH = os.path.join(TRACES_DIR, "trace.log")
 FRONTEND_DIST_DIR = os.path.join(PACKAGE_ROOT, "..", "frontend_workspaces", "frontend", "dist")
-EXTENSION_DIR = os.path.join(PACKAGE_ROOT, "..", "frontend_workspaces", "extension", "releases", "chrome-mv3")
+EXTENSION_DIR = os.path.join(
+    PACKAGE_ROOT, "..", "frontend_workspaces", "extension", "releases", "chrome-mv3"
+)
 STATIC_DIR_FLOWS_PATH = os.path.join(PACKAGE_ROOT, "backend", "server", "flows")
 SAVE_REUSE_PY_PATH = os.path.join(
     PACKAGE_ROOT, "backend", "tools_env", "registry", "mcp_servers", "saved_flows.py"
@@ -108,16 +125,16 @@ class AppState:
 
     def __init__(self):
         # Initializing all state variables to None or default values.
-        self.tracker: Optional[ActivityTracker] = None
-        self.env: Optional[BrowserEnvGymAsync | ExtensionEnv] = None
-        self.agent: Optional[DynamicAgentGraph] = (
+        self.tracker: ActivityTracker | None = None
+        self.env: BrowserEnvGymAsync | ExtensionEnv | None = None
+        self.agent: DynamicAgentGraph | None = (
             None  # Replace Any with your Agent's class type if available
         )
-        self.policy_system: Optional[Any] = None  # PolicyConfigurable instance
-        self.policy_filesystem_sync: Optional[Any] = None  # PolicyFilesystemSync instance
+        self.policy_system: Any | None = None  # PolicyConfigurable instance
+        self.policy_filesystem_sync: Any | None = None  # PolicyFilesystemSync instance
         # Per-thread cancellation events for concurrent user support
         # Using asyncio.Event for thread-safe cancellation signaling
-        self.stop_events: Dict[str, asyncio.Event] = {}
+        self.stop_events: dict[str, asyncio.Event] = {}
         self.output_format: OutputFormat = (
             OutputFormat.WXO if settings.advanced_features.wxo_integration else OutputFormat.DEFAULT
         )
@@ -127,28 +144,28 @@ class AppState:
         if USE_EMBEDDED_ASSETS:
             try:
                 frontend_path, extension_path = embedded_assets.extract_assets()
-                self.STATIC_DIR_HTML: Optional[str] = str(frontend_path)
-                self.EXTENSION_PATH: Optional[str] = str(extension_path)
+                self.STATIC_DIR_HTML: str | None = str(frontend_path)
+                self.EXTENSION_PATH: str | None = str(extension_path)
                 print(f"✅ Using embedded frontend: {self.STATIC_DIR_HTML}")
                 print(f"✅ Using embedded extension: {self.EXTENSION_PATH}")
             except Exception as e:
                 print(f"❌ Failed to extract embedded assets: {e}")
-                self.static_dirs: List[str] = [FRONTEND_DIST_DIR]
-                self.STATIC_DIR_HTML: Optional[str] = next(
+                self.static_dirs: list[str] = [FRONTEND_DIST_DIR]
+                self.STATIC_DIR_HTML: str | None = next(
                     (d for d in self.static_dirs if os.path.exists(d)), None
                 )
-                self.EXTENSION_PATH: Optional[str] = EXTENSION_DIR
+                self.EXTENSION_PATH: str | None = EXTENSION_DIR
         else:
-            self.static_dirs: List[str] = [FRONTEND_DIST_DIR]
-            self.STATIC_DIR_HTML: Optional[str] = next(
+            self.static_dirs: list[str] = [FRONTEND_DIST_DIR]
+            self.STATIC_DIR_HTML: str | None = next(
                 (d for d in self.static_dirs if os.path.exists(d)), None
             )
-            self.EXTENSION_PATH: Optional[str] = EXTENSION_DIR
+            self.EXTENSION_PATH: str | None = EXTENSION_DIR
         self.STATIC_DIR_FLOWS: str = STATIC_DIR_FLOWS_PATH
-        self.save_reuse_process: Optional[asyncio.subprocess.Process] = None
+        self.save_reuse_process: asyncio.subprocess.Process | None = None
         self.agent_id: str = "cuga-default"
-        self.config_version: Optional[int] = None
-        self.tools_include_by_app: Optional[Dict[str, List[str]]] = None
+        self.config_version: int | None = None
+        self.tools_include_by_app: dict[str, list[str]] | None = None
         self.tools_include_version: int = 0
         self.initialize_sdk()
 
@@ -164,7 +181,7 @@ class AppState:
                 log_filename="trace",
                 config=OTLPCollectorConfig(
                     endpoint="",
-                    app_name='cuga',
+                    app_name="cuga",
                 ),
             )
 
@@ -173,11 +190,11 @@ class DraftAppState:
     """State for the draft agent (Manage chat). Isolated from published app_state."""
 
     def __init__(self):
-        self.tools_include_by_app: Optional[Dict[str, List[str]]] = None
+        self.tools_include_by_app: dict[str, list[str]] | None = None
         self.tools_include_version: int = 0
-        self.agent: Optional[DynamicAgentGraph] = None
-        self.policy_system: Optional[Any] = None
-        self.policy_filesystem_sync: Optional[Any] = None  # PolicyFilesystemSync instance for draft
+        self.agent: DynamicAgentGraph | None = None
+        self.policy_system: Any | None = None
+        self.policy_filesystem_sync: Any | None = None  # PolicyFilesystemSync instance for draft
 
 
 # Create a single instance of the AppState class to be used throughout the application.
@@ -186,7 +203,7 @@ draft_app_state = DraftAppState()
 
 
 class ChatRequest(BaseModel):
-    messages: List[Dict[str, Any]]
+    messages: list[dict[str, Any]]
     stream: bool = False
 
 
@@ -205,7 +222,9 @@ async def manage_save_reuse_server():
     save_reuse_py_path = SAVE_REUSE_PY_PATH
 
     if not os.path.exists(save_reuse_py_path):
-        logger.warning(f"save_reuse.py not found at {save_reuse_py_path}. Server will not be started.")
+        logger.warning(
+            f"save_reuse.py not found at {save_reuse_py_path}. Server will not be started."
+        )
         return
 
     # If the process exists and is running, terminate it for a restart.
@@ -226,7 +245,9 @@ async def manage_save_reuse_server():
             stderr=asyncio.subprocess.PIPE,
         )
         await asyncio.sleep(6)
-        logger.info(f"save_reuse server started successfully with PID: {app_state.save_reuse_process.pid}")
+        logger.info(
+            f"save_reuse server started successfully with PID: {app_state.save_reuse_process.pid}"
+        )
     except FileNotFoundError:
         logger.error("Could not find 'uvicorn'. Please ensure it's installed in your environment.")
     except Exception as e:
@@ -297,7 +318,7 @@ async def lifespan(app: FastAPI):
                         sync_result = await validate_and_sync_policies(
                             app_state.policy_system.storage, app_state.policy_filesystem_sync
                         )
-                        if sync_result['removed'] or sync_result['added_to_filesystem']:
+                        if sync_result["removed"] or sync_result["added_to_filesystem"]:
                             logger.info(
                                 f"📊 Sync validation: "
                                 f"removed from storage={sync_result['removed']}, "
@@ -323,9 +344,9 @@ async def lifespan(app: FastAPI):
 
     if os.getenv("CUGA_MANAGER_MODE", "").lower() in ("true", "1", "yes", "on"):
         try:
+            from cuga.backend.cuga_graph.policy.utils import apply_policies_data_to_storage
             from cuga.backend.server.config_store import load_config
             from cuga.backend.server.managed_mcp import get_managed_mcp_path, write_managed_mcp_yaml
-            from cuga.backend.cuga_graph.policy.utils import apply_policies_data_to_storage
 
             config, version = await load_config(None)
             app_state.config_version = version
@@ -360,7 +381,8 @@ async def lifespan(app: FastAPI):
                 r = await client.post(f"{registry_url}/reload", timeout=10.0)
                 r.raise_for_status()
             logger.info(
-                "Manager mode: config loaded (version=%s), managed MCP written, registry reloaded", version
+                "Manager mode: config loaded (version=%s), managed MCP written, registry reloaded",
+                version,
             )
         except Exception as e:
             logger.warning("Manager mode startup: %s", e)
@@ -395,7 +417,7 @@ async def lifespan(app: FastAPI):
             ],
         )
     await asyncio.sleep(3)
-    app_state.tracker.start_experiment(task_ids=['demo'], experiment_name='demo', description="")
+    app_state.tracker.start_experiment(task_ids=["demo"], experiment_name="demo", description="")
     # Reset environment (env is shared but state is per-thread via LangGraph)
     await app_state.env.reset()
     langfuse_handler = (
@@ -412,7 +434,9 @@ async def lifespan(app: FastAPI):
             getattr(app_state, "tools_include_version", 0),
         )
 
-    tool_provider = CombinedToolProvider(get_include_by_app=_get_include_by_app, agent_id="cuga-default")
+    tool_provider = CombinedToolProvider(
+        get_include_by_app=_get_include_by_app, agent_id="cuga-default"
+    )
     app_state.agent = DynamicAgentGraph(
         None,
         langfuse_handler=langfuse_handler,
@@ -449,8 +473,8 @@ async def lifespan(app: FastAPI):
         )
 
     if settings.policy.enabled and app_state.policy_system:
-        from cuga.backend.cuga_graph.policy.storage import PolicyStorage
         from cuga.backend.cuga_graph.policy.configurable import PolicyConfigurable
+        from cuga.backend.cuga_graph.policy.storage import PolicyStorage
 
         policy_config = getattr(settings, "policy", None)
         base_name = policy_config.collection_name if policy_config else "cuga_policies"
@@ -499,19 +523,21 @@ async def lifespan(app: FastAPI):
 
     logger.info("Application finished starting up...")
     url = f"http://localhost:{settings.server_ports.demo}/manage/cuga-default"
-    if settings.advanced_features.mode == "api" and os.getenv("CUGA_TEST_ENV", "false").lower() not in (
+    if settings.advanced_features.mode == "api" and os.getenv(
+        "CUGA_TEST_ENV", "false"
+    ).lower() not in (
         "true",
         "1",
         "yes",
         "on",
     ):
         try:
-            if platform.system() == 'Darwin':  # macOS
-                subprocess.run(['open', url], check=False)
-            elif platform.system() == 'Windows':  # Windows
-                subprocess.run(['cmd', '/c', 'start', '', url], check=False, shell=False)
+            if platform.system() == "Darwin":  # macOS
+                subprocess.run(["open", url], check=False)
+            elif platform.system() == "Windows":  # Windows
+                subprocess.run(["cmd", "/c", "start", "", url], check=False, shell=False)
             else:  # Linux
-                subprocess.run(['xdg-open', url], check=False)
+                subprocess.run(["xdg-open", url], check=False)
         except Exception as e:
             logger.warning(f"Failed to open browser: {e}")
     yield
@@ -536,7 +562,9 @@ def get_element_names(tool_calls, elements):
     for tool in tool_calls:
         element_bid = tool.get("args", {}).get("bid", None)
         if element_bid:
-            elements_map[element_bid] = ActionAgentEventProcessor.get_element_name(elements, element_bid)
+            elements_map[element_bid] = ActionAgentEventProcessor.get_element_name(
+                elements, element_bid
+            )
     return elements_map
 
 
@@ -601,7 +629,9 @@ async def validate_and_sync_policies(storage, filesystem_sync):
                 if policy:
                     filesystem_sync.save_policy_to_file(policy)
                     added_to_filesystem_count += 1
-                    logger.info(f"💾 Saved policy '{policy_id}' to filesystem (was only in storage)")
+                    logger.info(
+                        f"💾 Saved policy '{policy_id}' to filesystem (was only in storage)"
+                    )
             except Exception as e:
                 logger.error(f"Failed to save policy '{policy_id}' to filesystem: {e}")
 
@@ -621,8 +651,8 @@ async def setup_page_info(state: AgentState, env: ExtensionEnv | BrowserEnvGymAs
     title = await env.get_title()
     url_app_name = get_app_name_from_url(state.url)
     # Sanitize title
-    sanitized_title = re.sub(r'[^\w\s-]', '', title) if title else ""
-    sanitized_title = re.sub(r'[-\s]+', '_', sanitized_title).strip('_').lower()
+    sanitized_title = re.sub(r"[^\w\s-]", "", title) if title else ""
+    sanitized_title = re.sub(r"[-\s]+", "_", sanitized_title).strip("_").lower()
     # Create app name: url + sanitized title
     state.current_app = (
         f"{url_app_name}_{sanitized_title}" if sanitized_title else url_app_name or "unknown_app"
@@ -632,7 +662,7 @@ async def setup_page_info(state: AgentState, env: ExtensionEnv | BrowserEnvGymAs
 
 
 async def _save_conversation_and_events_async(
-    agent_id: str, thread_id: str, user_id: str, state: AgentState, events: List[Dict[str, Any]]
+    agent_id: str, thread_id: str, user_id: str, state: AgentState, events: list[dict[str, Any]]
 ):
     """Save conversation history and stream events asynchronously."""
     try:
@@ -669,7 +699,9 @@ async def save_conversation_to_db(
 
         # Debug logging
         logger.info(f"=== SAVE DEBUG === thread_id={thread_id}, version={new_version}")
-        logger.info(f"State has chat_messages: {len(state.chat_messages) if state.chat_messages else 0}")
+        logger.info(
+            f"State has chat_messages: {len(state.chat_messages) if state.chat_messages else 0}"
+        )
         logger.info(
             f"State has chat_agent_messages: {len(state.chat_agent_messages) if state.chat_agent_messages else 0}"
         )
@@ -700,7 +732,7 @@ async def save_conversation_to_db(
                 messages.append(
                     {
                         "role": role,
-                        "content": msg.content if hasattr(msg, 'content') else str(msg),
+                        "content": msg.content if hasattr(msg, "content") else str(msg),
                         "timestamp": datetime.utcnow().isoformat(),
                         "metadata": {"type": type(msg).__name__, "message_type": "chat_messages"},
                     }
@@ -717,15 +749,20 @@ async def save_conversation_to_db(
                         else "assistant"
                         if isinstance(msg, AIMessage)
                         else "system",
-                        "content": msg.content if hasattr(msg, 'content') else str(msg),
+                        "content": msg.content if hasattr(msg, "content") else str(msg),
                         "timestamp": datetime.utcnow().isoformat(),
-                        "metadata": {"type": type(msg).__name__, "message_type": "chat_agent_messages"},
+                        "metadata": {
+                            "type": type(msg).__name__,
+                            "message_type": "chat_agent_messages",
+                        },
                     }
                 )
 
         # Add supervisor_chat_messages if available
         if state.supervisor_chat_messages:
-            logger.info(f"Processing {len(state.supervisor_chat_messages)} supervisor_chat_messages")
+            logger.info(
+                f"Processing {len(state.supervisor_chat_messages)} supervisor_chat_messages"
+            )
             for msg in state.supervisor_chat_messages:
                 messages.append(
                     {
@@ -734,9 +771,12 @@ async def save_conversation_to_db(
                         else "assistant"
                         if isinstance(msg, AIMessage)
                         else "system",
-                        "content": msg.content if hasattr(msg, 'content') else str(msg),
+                        "content": msg.content if hasattr(msg, "content") else str(msg),
                         "timestamp": datetime.utcnow().isoformat(),
-                        "metadata": {"type": type(msg).__name__, "message_type": "supervisor_chat_messages"},
+                        "metadata": {
+                            "type": type(msg).__name__,
+                            "message_type": "supervisor_chat_messages",
+                        },
                     }
                 )
 
@@ -809,7 +849,9 @@ async def event_stream(
                     local_tracker.intent = query
                     # Apply sliding window to maintain message history limit
                     local_state.apply_message_sliding_window()
-                    logger.info(f"Loaded existing state for thread_id: {thread_id} (followup question)")
+                    logger.info(
+                        f"Loaded existing state for thread_id: {thread_id} (followup question)"
+                    )
                 else:
                     # No existing state, create new one
                     local_state = default_state(page=None, observation=None, goal="")
@@ -819,7 +861,9 @@ async def event_stream(
                     logger.info(f"Created new state for thread_id: {thread_id}")
             except Exception as e:
                 # If state retrieval fails, create new state
-                logger.warning(f"Failed to retrieve state for thread_id {thread_id}, creating new state: {e}")
+                logger.warning(
+                    f"Failed to retrieve state for thread_id {thread_id}, creating new state: {e}"
+                )
                 local_state = default_state(page=None, observation=None, goal="")
                 local_state.input = query
                 local_state.thread_id = thread_id
@@ -833,7 +877,9 @@ async def event_stream(
     else:
         # For resume, fetch state from LangGraph
         if thread_id:
-            latest_state_values = run_agent.graph.get_state({"configurable": {"thread_id": thread_id}}).values
+            latest_state_values = run_agent.graph.get_state(
+                {"configurable": {"thread_id": thread_id}}
+            ).values
             if latest_state_values:
                 local_state = AgentState(**latest_state_values)
                 local_state.thread_id = thread_id
@@ -841,7 +887,10 @@ async def event_stream(
     if local_state:
         from cuga.config import get_service_instance_id, get_tenant_id
 
-        local_state.service_scope = {"tenant_id": get_tenant_id(), "instance_id": get_service_instance_id()}
+        local_state.service_scope = {
+            "tenant_id": get_tenant_id(),
+            "instance_id": get_service_instance_id(),
+        }
 
     if not api_mode:
         local_obs, _, _, _, local_info = await app_state.env.step("")
@@ -856,7 +905,7 @@ async def event_stream(
             local_state.url = app_state.env.get_url()
             await setup_page_info(local_state, app_state.env)
 
-    local_tracker.task_id = 'demo'
+    local_tracker.task_id = "demo"
 
     # Initialize event sequence counter and buffer for stream event tracking
     event_sequence = 0
@@ -900,7 +949,9 @@ async def event_stream(
     logger.debug(f"Resume: {resume.model_dump_json() if resume else ''}")
 
     # Use local_state if available, otherwise None (AgentLoop/LangGraph will handle state retrieval)
-    agent_stream_gen = agent_loop_obj.run_stream(state=local_state if not resume else None, resume=resume)
+    agent_stream_gen = agent_loop_obj.run_stream(
+        state=local_state if not resume else None, resume=resume
+    )
 
     # Print initial trace ID status
     if langfuse_handler and settings.advanced_features.langfuse_tracing:
@@ -913,9 +964,15 @@ async def event_stream(
     try:
         while True:
             # Check cancellation event (non-blocking)
-            if thread_id and thread_id in app_state.stop_events and app_state.stop_events[thread_id].is_set():
+            if (
+                thread_id
+                and thread_id in app_state.stop_events
+                and app_state.stop_events[thread_id].is_set()
+            ):
                 logger.info(f"Agent execution stopped by user for thread_id: {thread_id}")
-                yield StreamEvent(name="Stopped", data="Agent execution was stopped by user.").format()
+                yield StreamEvent(
+                    name="Stopped", data="Agent execution was stopped by user."
+                ).format()
                 return
 
             async for event in agent_stream_gen:
@@ -928,7 +985,9 @@ async def event_stream(
                     logger.info(
                         f"Agent execution stopped by user during event processing for thread_id: {thread_id}"
                     )
-                    yield StreamEvent(name="Stopped", data="Agent execution was stopped by user.").format()
+                    yield StreamEvent(
+                        name="Stopped", data="Agent execution was stopped by user."
+                    ).format()
                     return
 
                 if isinstance(event, AgentLoopAnswer):
@@ -982,11 +1041,15 @@ async def event_stream(
                                 # Extract active policies from cuga_lite_metadata
                                 if local_state.cuga_lite_metadata:
                                     metadata = local_state.cuga_lite_metadata
-                                    if metadata.get("policy_matched") or metadata.get("policy_blocked"):
+                                    if metadata.get("policy_matched") or metadata.get(
+                                        "policy_blocked"
+                                    ):
                                         policy_data = {
                                             "type": "policy",
                                             "policy_type": metadata.get("policy_type", "unknown"),
-                                            "policy_name": metadata.get("policy_name", "Unknown Policy"),
+                                            "policy_name": metadata.get(
+                                                "policy_name", "Unknown Policy"
+                                            ),
                                             "policy_blocked": metadata.get("policy_blocked", False),
                                             "policy_matched": metadata.get("policy_matched", False),
                                             "content": metadata.get("response_content")
@@ -994,12 +1057,20 @@ async def event_stream(
                                             or metadata.get("approval_message")
                                             or "",
                                             "metadata": {
-                                                "policy_blocked": metadata.get("policy_blocked", False),
+                                                "policy_blocked": metadata.get(
+                                                    "policy_blocked", False
+                                                ),
                                                 "policy_id": metadata.get("policy_id"),
                                                 "policy_name": metadata.get("policy_name"),
-                                                "policy_type": metadata.get("policy_type", "unknown"),
-                                                "policy_reasoning": metadata.get("policy_reasoning", ""),
-                                                "policy_confidence": metadata.get("policy_confidence"),
+                                                "policy_type": metadata.get(
+                                                    "policy_type", "unknown"
+                                                ),
+                                                "policy_reasoning": metadata.get(
+                                                    "policy_reasoning", ""
+                                                ),
+                                                "policy_confidence": metadata.get(
+                                                    "policy_confidence"
+                                                ),
                                                 "response_content": metadata.get("response_content")
                                                 or metadata.get("content")
                                                 or metadata.get("approval_message")
@@ -1085,7 +1156,9 @@ async def event_stream(
                             continue
 
                         msg: AIMessage = local_state.messages[-1]
-                        yield StreamEvent(name="tool_call", data=format_tools(msg.tool_calls)).format()
+                        yield StreamEvent(
+                            name="tool_call", data=format_tools(msg.tool_calls)
+                        ).format()
 
                         feedback = await AgentRunner.process_event_async(
                             local_state.messages[-1].tool_calls,
@@ -1117,7 +1190,7 @@ async def event_stream(
                         agent_stream_gen = agent_loop_obj.run_stream(state=None)
                         break
                 else:
-                    logger.debug("Yield {}".format(event))
+                    logger.debug(f"Yield {event}")
                     if thread_id:
                         latest_state_values = run_agent.graph.get_state(
                             {"configurable": {"thread_id": thread_id}}
@@ -1125,7 +1198,7 @@ async def event_stream(
                         if latest_state_values:
                             local_state = AgentState(**latest_state_values)
                     name = ((event.split("\n")[0]).split(":")[1]).strip()
-                    logger.debug("Yield {}".format(event))
+                    logger.debug(f"Yield {event}")
                     if name not in ["ChatAgent"]:
                         # Add stream event to buffer instead of immediate DB write
                         if thread_id:
@@ -1198,7 +1271,7 @@ async def health():
 @app.post("/api/validate-build")
 async def validate_build(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Run post-build validation on a project directory.
 
@@ -1221,9 +1294,7 @@ async def validate_build(
 
     project_dir = Path(project_dir_str)
     if not project_dir.exists():
-        return JSONResponse(
-            {"error": f"Directory not found: {project_dir}"}, status_code=404
-        )
+        return JSONResponse({"error": f"Directory not found: {project_dir}"}, status_code=404)
 
     report = validate_project(project_dir, spec)
     return JSONResponse(report)
@@ -1231,7 +1302,7 @@ async def validate_build(
 
 @app.get("/api/build-stats")
 async def build_stats(
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Get aggregate build statistics from the catalog."""
     from cuga.build_catalog import get_build_stats
@@ -1242,7 +1313,7 @@ async def build_stats(
 
 @app.get("/api/build-history")
 async def build_history(
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Get recent build history records."""
     from cuga.build_catalog import load_history
@@ -1327,7 +1398,7 @@ async def auth_logout():
     auth = getattr(settings, "auth", None)
     cookie_name = getattr(auth, "session_cookie_name", "cuga_session") if auth else "cuga_session"
 
-    end_session_url: Optional[str] = None
+    end_session_url: str | None = None
     try:
         client = get_oidc_client()
         if client:
@@ -1395,12 +1466,16 @@ if getattr(settings.advanced_features, "use_extension", False):
         query = body.get("query", "")
         request_id = body.get("request_id", None)
         if not query:
-            return JSONResponse({"type": "agent_error", "message": "Missing query"}, status_code=400)
+            return JSONResponse(
+                {"type": "agent_error", "message": "Missing query"}, status_code=400
+            )
 
         try:
             validate_input_length(query)
         except HTTPException as e:
-            return JSONResponse({"type": "agent_error", "message": e.detail}, status_code=e.status_code)
+            return JSONResponse(
+                {"type": "agent_error", "message": e.detail}, status_code=e.status_code
+            )
 
         async def event_gen():
             # Initial processing message
@@ -1419,7 +1494,8 @@ if getattr(settings.advanced_features, "use_extension", False):
                     query,
                     api_mode=settings.advanced_features.mode == "api",
                     resume=query if isinstance(query, ActionResponse) else None,
-                    thread_id=request_id or str(uuid.uuid4()),  # Use request_id as thread_id if available
+                    thread_id=request_id
+                    or str(uuid.uuid4()),  # Use request_id as thread_id if available
                 ):
                     if chunk.strip():
                         # Remove 'data: ' prefix if present
@@ -1432,14 +1508,21 @@ if getattr(settings.advanced_features, "use_extension", False):
                             content = chunk
                         yield (
                             json.dumps(
-                                {"type": "agent_response", "content": content, "request_id": request_id}
+                                {
+                                    "type": "agent_response",
+                                    "content": content,
+                                    "request_id": request_id,
+                                }
                             )
                             + "\n"
                         )
                 # Completion message
                 yield json.dumps({"type": "agent_complete", "request_id": request_id}) + "\n"
             except Exception as e:
-                yield json.dumps({"type": "agent_error", "message": str(e), "request_id": request_id}) + "\n"
+                yield (
+                    json.dumps({"type": "agent_error", "message": str(e), "request_id": request_id})
+                    + "\n"
+                )
 
         return StreamingResponse(event_gen(), media_type="application/jsonlines")
 
@@ -1447,7 +1530,7 @@ if getattr(settings.advanced_features, "use_extension", False):
 @app.post("/stream")
 async def stream(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to start the agent stream. Use draft agent when X-Use-Draft is set."""
     user_id = current_user.sub if current_user else DEFAULT_USER_ID
@@ -1462,7 +1545,12 @@ async def stream(
     # User message will be saved as part of the event stream buffer
     # No need to save it separately here to avoid race conditions
 
-    use_draft = str(request.headers.get("X-Use-Draft", "") or "").lower() in ("1", "true", "yes", "on")
+    use_draft = str(request.headers.get("X-Use-Draft", "") or "").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
     disable_history = str(request.headers.get("X-Disable-History", "") or "").lower() in (
         "1",
         "true",
@@ -1494,7 +1582,7 @@ async def stream(
 
 
 @app.post("/stop")
-async def stop(request: Request, current_user: Optional[UserInfo] = Depends(require_auth)):
+async def stop(request: Request, current_user: UserInfo | None = Depends(require_auth)):
     """Endpoint to stop the agent execution for a specific thread."""
     # Get thread_id from header or body
     thread_id = request.headers.get("X-Thread-ID")
@@ -1523,7 +1611,7 @@ async def stop(request: Request, current_user: Optional[UserInfo] = Depends(requ
 @app.post("/reset")
 async def reset_agent_state(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to reset the agent state to default values."""
     logger.info("Received reset request")
@@ -1566,13 +1654,13 @@ async def reset_agent_state(
         return {"status": "success", "message": "Agent state reset successfully"}
     except Exception as e:
         logger.error(f"Failed to reset agent state: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to reset agent state: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to reset agent state: {e!s}")
 
 
 @app.get("/api/conversation-threads")
 async def get_conversation_threads(
     agent_id: str = "cuga-default",
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Retrieve all conversation threads for an agent."""
     user_id = current_user.sub if current_user else DEFAULT_USER_ID
@@ -1582,14 +1670,14 @@ async def get_conversation_threads(
         return JSONResponse({"threads": threads})
     except Exception as e:
         logger.error(f"Failed to get conversation threads: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get conversation threads: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get conversation threads: {e!s}")
 
 
 @app.get("/api/conversation-messages/{thread_id}")
 async def get_conversation_messages(
     thread_id: str,
     agent_id: str = "cuga-default",
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Retrieve all messages for a specific conversation thread."""
     user_id = current_user.sub if current_user else DEFAULT_USER_ID
@@ -1601,7 +1689,9 @@ async def get_conversation_messages(
             return JSONResponse({"messages": []})
 
         # Get the conversation
-        conversation = await conversation_db.get_conversation(agent_id, thread_id, latest_version, user_id)
+        conversation = await conversation_db.get_conversation(
+            agent_id, thread_id, latest_version, user_id
+        )
 
         if not conversation:
             return JSONResponse({"messages": []})
@@ -1611,14 +1701,14 @@ async def get_conversation_messages(
         return JSONResponse({"messages": messages_dict})
     except Exception as e:
         logger.error(f"Failed to get conversation messages: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get conversation messages: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get conversation messages: {e!s}")
 
 
 @app.get("/api/conversation-stream-events/{thread_id}")
 async def get_conversation_stream_events(
     thread_id: str,
     agent_id: str = "cuga-default",
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Retrieve all streaming events for a specific conversation thread."""
     user_id = current_user.sub if current_user else DEFAULT_USER_ID
@@ -1631,17 +1721,19 @@ async def get_conversation_stream_events(
 
         # Convert Pydantic models to dictionaries for JSON serialization
         events_dict = [
-            event.model_dump() if hasattr(event, 'model_dump') else dict(event)
+            event.model_dump() if hasattr(event, "model_dump") else dict(event)
             for event in stream_history.events
         ]
         return JSONResponse({"events": events_dict})
     except Exception as e:
         logger.error(f"Failed to get conversation stream events: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get conversation stream events: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get conversation stream events: {e!s}"
+        )
 
 
 @app.get("/api/config/tools")
-async def get_tools_config(current_user: Optional[UserInfo] = Depends(require_auth)):
+async def get_tools_config(current_user: UserInfo | None = Depends(require_auth)):
     """Retrieve tools configuration."""
     config_path = os.path.join(
         PACKAGE_ROOT, "backend", "tools_env", "registry", "config", "mcp_servers_crm.yaml"
@@ -1651,7 +1743,7 @@ async def get_tools_config(current_user: Optional[UserInfo] = Depends(require_au
             loop = asyncio.get_event_loop()
 
             def _read_file():
-                with open(config_path, "r") as f:
+                with open(config_path) as f:
                     return yaml.safe_load(f)
 
             config_data = await loop.run_in_executor(None, _read_file)
@@ -1660,13 +1752,13 @@ async def get_tools_config(current_user: Optional[UserInfo] = Depends(require_au
             return JSONResponse({"services": [], "mcpServers": {}})
     except Exception as e:
         logger.error(f"Failed to load tools config: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to load tools config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load tools config: {e!s}")
 
 
 @app.post("/api/config/tools")
 async def save_tools_config(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Save tools configuration."""
     config_path = os.path.join(
@@ -1682,26 +1774,28 @@ async def save_tools_config(
 
         await loop.run_in_executor(None, _write_file)
         logger.info(f"Tools configuration saved to {config_path}")
-        return JSONResponse({"status": "success", "message": "Tools configuration saved successfully"})
+        return JSONResponse(
+            {"status": "success", "message": "Tools configuration saved successfully"}
+        )
     except Exception as e:
         logger.error(f"Failed to save tools config: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save tools config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save tools config: {e!s}")
 
 
 @app.get("/api/config/model")
-async def get_model_config(current_user: Optional[UserInfo] = Depends(require_auth)):
+async def get_model_config(current_user: UserInfo | None = Depends(require_auth)):
     """Endpoint to retrieve model configuration."""
     try:
         return JSONResponse({})
     except Exception as e:
         logger.error(f"Failed to load model config: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to load model config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load model config: {e!s}")
 
 
 @app.post("/api/config/model")
 async def save_model_config(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to save model configuration (note: this updates environment variables for current session only)."""
     try:
@@ -1715,23 +1809,23 @@ async def save_model_config(
         return JSONResponse({"status": "success", "message": "Model configuration updated"})
     except Exception as e:
         logger.error(f"Failed to save model config: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save model config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save model config: {e!s}")
 
 
 @app.get("/api/config/knowledge")
-async def get_knowledge_config(current_user: Optional[UserInfo] = Depends(require_auth)):
+async def get_knowledge_config(current_user: UserInfo | None = Depends(require_auth)):
     """Endpoint to retrieve knowledge configuration."""
     try:
         return JSONResponse({})
     except Exception as e:
         logger.error(f"Failed to load knowledge config: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to load knowledge config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load knowledge config: {e!s}")
 
 
 @app.post("/api/config/knowledge")
 async def save_knowledge_config(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to save knowledge configuration."""
     try:
@@ -1740,11 +1834,11 @@ async def save_knowledge_config(
         return JSONResponse({"status": "success", "message": "Knowledge configuration saved"})
     except Exception as e:
         logger.error(f"Failed to save knowledge config: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save knowledge config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save knowledge config: {e!s}")
 
 
 @app.get("/api/conversations")
-async def get_conversations(current_user: Optional[UserInfo] = Depends(require_auth)):
+async def get_conversations(current_user: UserInfo | None = Depends(require_auth)):
     """Endpoint to retrieve conversation history."""
     try:
         # TODO: Implement actual conversation storage
@@ -1752,13 +1846,13 @@ async def get_conversations(current_user: Optional[UserInfo] = Depends(require_a
         return JSONResponse([])
     except Exception as e:
         logger.error(f"Failed to load conversations: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to load conversations: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load conversations: {e!s}")
 
 
 @app.post("/api/conversations")
 async def create_conversation(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to create a new conversation."""
     try:
@@ -1774,14 +1868,14 @@ async def create_conversation(
         return JSONResponse(conversation)
     except Exception as e:
         logger.error(f"Failed to create conversation: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create conversation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create conversation: {e!s}")
 
 
 @app.delete("/api/conversations/{conversation_id}")
 async def delete_conversation(
     conversation_id: str,
     agent_id: str = "cuga-default",
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Delete a conversation thread and its stream events."""
     user_id = current_user.sub if current_user else DEFAULT_USER_ID
@@ -1796,23 +1890,23 @@ async def delete_conversation(
             raise HTTPException(status_code=500, detail="Failed to delete conversation")
     except Exception as e:
         logger.error(f"Failed to delete conversation: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete conversation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete conversation: {e!s}")
 
 
 @app.get("/api/config/memory")
-async def get_memory_config(current_user: Optional[UserInfo] = Depends(require_auth)):
+async def get_memory_config(current_user: UserInfo | None = Depends(require_auth)):
     """Endpoint to retrieve memory configuration."""
     try:
         return JSONResponse({})
     except Exception as e:
         logger.error(f"Failed to load memory config: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to load memory config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load memory config: {e!s}")
 
 
 @app.post("/api/config/memory")
 async def save_memory_config(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to save memory configuration."""
     try:
@@ -1821,19 +1915,24 @@ async def save_memory_config(
         return JSONResponse({"status": "success", "message": "Memory configuration saved"})
     except Exception as e:
         logger.error(f"Failed to save memory config: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save memory config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save memory config: {e!s}")
 
 
 @app.get("/api/config/policies")
 async def get_policies_config(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to retrieve policies configuration. Use draft collection when X-Use-Draft header is set."""
     if not settings.policy.enabled:
         return JSONResponse({"enablePolicies": False, "policies": []})
 
-    use_draft = str(request.headers.get("X-Use-Draft", "") or "").lower() in ("1", "true", "yes", "on")
+    use_draft = str(request.headers.get("X-Use-Draft", "") or "").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
     try:
         from cuga.backend.cuga_graph.policy.storage import PolicyStorage
 
@@ -1891,7 +1990,9 @@ async def get_policies_config(
             elif policy_dict["type"] == "playbook":
                 frontend_policy["markdown_content"] = policy_dict.get("markdown_content", "")
                 frontend_policy["steps"] = policy_dict.get("steps", [])
-                frontend_policy["inject_as_system_prompt"] = policy_dict.get("inject_as_system_prompt", True)
+                frontend_policy["inject_as_system_prompt"] = policy_dict.get(
+                    "inject_as_system_prompt", True
+                )
             elif policy_dict["type"] == "tool_guide":
                 frontend_policy["target_tools"] = policy_dict.get("target_tools", [])
                 frontend_policy["target_apps"] = policy_dict.get("target_apps")
@@ -1925,7 +2026,7 @@ async def get_policies_config(
 @app.post("/api/config/policies")
 async def save_policies_config(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to save policies configuration. Use draft collection when X-Use-Draft header is set."""
     if not settings.policy.enabled:
@@ -1934,7 +2035,12 @@ async def save_policies_config(
             status_code=403,
         )
 
-    use_draft = str(request.headers.get("X-Use-Draft", "") or "").lower() in ("1", "true", "yes", "on")
+    use_draft = str(request.headers.get("X-Use-Draft", "") or "").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
     try:
         from cuga.backend.cuga_graph.policy.storage import PolicyStorage
         from cuga.backend.cuga_graph.policy.utils import apply_policies_data_to_storage
@@ -2030,7 +2136,9 @@ async def save_policies_config(
                 logger.info("Keeping policy system storage connected")
 
         logger.info(f"Policies configuration saved: {len(policies)} policies")
-        return JSONResponse({"status": "success", "message": f"Saved {len(policies)} policies successfully"})
+        return JSONResponse(
+            {"status": "success", "message": f"Saved {len(policies)} policies successfully"}
+        )
     except Exception as e:
         logger.error(f"Failed to save policies config: {e}")
         logger.exception(e)
@@ -2039,7 +2147,7 @@ async def save_policies_config(
         return JSONResponse(
             {
                 "status": "error",
-                "message": f"Failed to save policies: {str(e)}",
+                "message": f"Failed to save policies: {e!s}",
                 "traceback": traceback.format_exc(),
             },
             status_code=500,
@@ -2049,9 +2157,9 @@ async def save_policies_config(
 @app.get("/api/tools/list")
 async def get_tools_list(
     request: Request,
-    agent_id: Optional[str] = None,
-    draft: Optional[str] = None,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    agent_id: str | None = None,
+    draft: str | None = None,
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to retrieve detailed list of all available tools.
 
@@ -2115,11 +2223,11 @@ async def get_tools_list(
         return JSONResponse({"tools": tools_list, "apps": apps_list})
     except Exception as e:
         logger.error(f"Failed to get tools list: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get tools list: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get tools list: {e!s}")
 
 
 @app.get("/api/tools/status")
-async def get_tools_status(current_user: Optional[UserInfo] = Depends(require_auth)):
+async def get_tools_status(current_user: UserInfo | None = Depends(require_auth)):
     """Endpoint to retrieve tools connection status."""
     try:
         # Get available apps and their tools
@@ -2156,13 +2264,13 @@ async def get_tools_status(current_user: Optional[UserInfo] = Depends(require_au
         return JSONResponse({"tools": tools, "internalToolsCount": internal_tools_count})
     except Exception as e:
         logger.error(f"Failed to get tools status: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get tools status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get tools status: {e!s}")
 
 
 @app.post("/api/config/mode")
 async def save_mode_config(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to save execution mode (fast/balanced) and update agent state lite_mode.
     Note: Mode switching is disabled in hosted environments."""
@@ -2182,13 +2290,13 @@ async def save_mode_config(
         )
     except Exception as e:
         logger.error(f"Failed to save mode: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save mode: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save mode: {e!s}")
 
 
 @app.get("/api/agent/state")
 async def get_agent_state(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to retrieve agent state for a specific thread."""
     try:
@@ -2206,7 +2314,9 @@ async def get_agent_state(
             raise HTTPException(status_code=503, detail="Agent graph not initialized")
 
         try:
-            state_snapshot = app_state.agent.graph.get_state({"configurable": {"thread_id": thread_id}})
+            state_snapshot = app_state.agent.graph.get_state(
+                {"configurable": {"thread_id": thread_id}}
+            )
 
             if not state_snapshot or not state_snapshot.values:
                 return JSONResponse(
@@ -2244,23 +2354,24 @@ async def get_agent_state(
             )
         except Exception as e:
             logger.error(f"Failed to retrieve state for thread_id {thread_id}: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to retrieve state: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to retrieve state: {e!s}")
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to get agent state: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get agent state: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get agent state: {e!s}")
 
 
 @app.get("/api/config/subagents")
-async def get_subagents_config(current_user: Optional[UserInfo] = Depends(require_auth)):
+async def get_subagents_config(current_user: UserInfo | None = Depends(require_auth)):
     """Endpoint to retrieve sub-agents configuration."""
     try:
-        from cuga.config import settings
         import os
 
+        from cuga.config import settings
+
         # Check if supervisor is enabled
-        supervisor_enabled = getattr(settings.supervisor, 'enabled', False)
+        supervisor_enabled = getattr(settings.supervisor, "enabled", False)
 
         if not supervisor_enabled:
             return JSONResponse(
@@ -2273,7 +2384,7 @@ async def get_subagents_config(current_user: Optional[UserInfo] = Depends(requir
             )
 
         # Load supervisor config if available
-        supervisor_config_path = getattr(settings.supervisor, 'config_path', '')
+        supervisor_config_path = getattr(settings.supervisor, "config_path", "")
 
         if not supervisor_config_path:
             return JSONResponse(
@@ -2304,40 +2415,40 @@ async def get_subagents_config(current_user: Optional[UserInfo] = Depends(requir
         # Parse YAML to extract agent info
         import yaml
 
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             config = yaml.safe_load(f)
 
         # Build sub-agents list for UI
         sub_agents = []
-        for idx, agent_config in enumerate(config.get('agents', [])):
-            agent_name = agent_config.get('name', f'agent_{idx}')
-            agent_type = agent_config.get('type', 'internal')
-            description = agent_config.get('description', '')
-            special_instructions = agent_config.get('special_instructions', '')
+        for idx, agent_config in enumerate(config.get("agents", [])):
+            agent_name = agent_config.get("name", f"agent_{idx}")
+            agent_type = agent_config.get("type", "internal")
+            description = agent_config.get("description", "")
+            special_instructions = agent_config.get("special_instructions", "")
 
             # Get apps
-            apps = agent_config.get('apps', [])
+            apps = agent_config.get("apps", [])
             assigned_apps = []
             for app in apps:
-                app_name = app if isinstance(app, str) else app.get('name', '')
+                app_name = app if isinstance(app, str) else app.get("name", "")
                 if app_name:
                     assigned_apps.append(
                         {
-                            'appName': app_name,
-                            'tools': [],  # Tools will be loaded dynamically by frontend
+                            "appName": app_name,
+                            "tools": [],  # Tools will be loaded dynamically by frontend
                         }
                     )
 
             # Get MCP servers
-            mcp_servers = agent_config.get('mcp_servers', [])
+            mcp_servers = agent_config.get("mcp_servers", [])
 
             # Determine source type
             source_config = {"type": "direct"}
 
-            if agent_config.get('a2a_protocol', {}).get('enabled'):
+            if agent_config.get("a2a_protocol", {}).get("enabled"):
                 source_config = {
                     "type": "a2a",
-                    "url": agent_config.get('a2a_protocol', {}).get('url', ''),
+                    "url": agent_config.get("a2a_protocol", {}).get("url", ""),
                     "name": agent_name,
                 }
             elif mcp_servers:
@@ -2345,7 +2456,7 @@ async def get_subagents_config(current_user: Optional[UserInfo] = Depends(requir
                 mcp_server = mcp_servers[0] if isinstance(mcp_servers, list) else mcp_servers
                 source_config = {
                     "type": "mcp",
-                    "url": mcp_server.get('url', '') if isinstance(mcp_server, dict) else '',
+                    "url": mcp_server.get("url", "") if isinstance(mcp_server, dict) else "",
                     "streamType": "sse",  # Default to SSE for MCP
                 }
 
@@ -2375,11 +2486,11 @@ async def get_subagents_config(current_user: Optional[UserInfo] = Depends(requir
 
     except Exception as e:
         logger.error(f"Failed to load sub-agents config: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to load sub-agents config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load sub-agents config: {e!s}")
 
 
 @app.get("/api/apps")
-async def get_apps_endpoint(current_user: Optional[UserInfo] = Depends(require_auth)):
+async def get_apps_endpoint(current_user: UserInfo | None = Depends(require_auth)):
     """Endpoint to retrieve available apps."""
     try:
         apps = await get_apps()
@@ -2401,7 +2512,7 @@ async def get_apps_endpoint(current_user: Optional[UserInfo] = Depends(require_a
 @app.get("/api/apps/{app_name}/tools")
 async def get_app_tools(
     app_name: str,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to retrieve tools for a specific app."""
     try:
@@ -2422,7 +2533,7 @@ async def get_app_tools(
 @app.post("/api/config/subagents")
 async def save_subagents_config(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to save sub-agents configuration."""
     try:
@@ -2431,13 +2542,13 @@ async def save_subagents_config(
         return JSONResponse({"status": "success", "message": "Sub-agents configuration saved"})
     except Exception as e:
         logger.error(f"Failed to save sub-agents config: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save sub-agents config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save sub-agents config: {e!s}")
 
 
 @app.post("/api/config/agent-mode")
 async def save_agent_mode_config(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to save agent mode (supervisor/single)."""
     try:
@@ -2447,11 +2558,11 @@ async def save_agent_mode_config(
         return JSONResponse({"status": "success", "mode": mode})
     except Exception as e:
         logger.error(f"Failed to save agent mode: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save agent mode: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save agent mode: {e!s}")
 
 
 @app.get("/api/agents")
-async def get_agents_list(current_user: Optional[UserInfo] = Depends(require_auth)):
+async def get_agents_list(current_user: UserInfo | None = Depends(require_auth)):
     """List configured agents (dashboard)."""
     try:
         tools_count = 0
@@ -2492,7 +2603,7 @@ async def get_agents_list(current_user: Optional[UserInfo] = Depends(require_aut
 
 
 @app.get("/api/agent/context")
-async def get_agent_context(current_user: Optional[UserInfo] = Depends(require_auth)):
+async def get_agent_context(current_user: UserInfo | None = Depends(require_auth)):
     """Return current agent id and config version for UI."""
     return JSONResponse(
         {
@@ -2503,7 +2614,7 @@ async def get_agent_context(current_user: Optional[UserInfo] = Depends(require_a
 
 
 @app.get("/api/workspace/tree")
-async def get_workspace_tree(current_user: Optional[UserInfo] = Depends(require_auth)):
+async def get_workspace_tree(current_user: UserInfo | None = Depends(require_auth)):
     """Endpoint to retrieve the workspace folder tree."""
     try:
         workspace_path = Path(os.getcwd()) / "cuga_workspace"
@@ -2521,29 +2632,38 @@ async def get_workspace_tree(current_user: Optional[UserInfo] = Depends(require_
             else:
                 children = []
                 try:
-                    for item in sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
-                        if not item.name.startswith('.'):
+                    for item in sorted(
+                        path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())
+                    ):
+                        if not item.name.startswith("."):
                             children.append(build_tree(item, base_path))
                 except PermissionError:
                     pass
 
-                return {"name": path.name, "path": relative_path, "type": "directory", "children": children}
+                return {
+                    "name": path.name,
+                    "path": relative_path,
+                    "type": "directory",
+                    "children": children,
+                }
 
         tree = []
-        for item in sorted(workspace_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
-            if not item.name.startswith('.'):
+        for item in sorted(
+            workspace_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())
+        ):
+            if not item.name.startswith("."):
                 tree.append(build_tree(item, workspace_path))
 
         return JSONResponse({"tree": tree})
     except Exception as e:
         logger.error(f"Failed to load workspace tree: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to load workspace tree: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load workspace tree: {e!s}")
 
 
 @app.get("/api/workspace/file")
 async def get_workspace_file(
     path: str,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Endpoint to retrieve a file's content from the workspace."""
     try:
@@ -2572,7 +2692,7 @@ async def get_workspace_file(
             loop = asyncio.get_event_loop()
 
             def _read_file():
-                with open(file_path, 'r', encoding='utf-8') as f:
+                with open(file_path, encoding="utf-8") as f:
                     return f.read()
 
             content = await loop.run_in_executor(None, _read_file)
@@ -2584,13 +2704,13 @@ async def get_workspace_file(
         raise
     except Exception as e:
         logger.error(f"Failed to load file: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to load file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load file: {e!s}")
 
 
 @app.get("/api/workspace/download")
 async def download_workspace_file(
     path: str,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """Download a file from the workspace."""
     try:
@@ -2610,13 +2730,13 @@ async def download_workspace_file(
             raise HTTPException(status_code=400, detail="Path is not a file")
 
         return FileResponse(
-            path=str(file_path), filename=file_path.name, media_type='application/octet-stream'
+            path=str(file_path), filename=file_path.name, media_type="application/octet-stream"
         )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to download file: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to download file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to download file: {e!s}")
 
 
 # DISABLED: Delete endpoint commented out for security
@@ -2704,7 +2824,7 @@ async def download_workspace_file(
 @app.post("/functions/call", tags=["Registry Proxy"])
 async def proxy_function_call(
     request: Request,
-    current_user: Optional[UserInfo] = Depends(require_auth),
+    current_user: UserInfo | None = Depends(require_auth),
 ):
     """
     Proxy endpoint that forwards function call requests to the registry server.
@@ -2716,36 +2836,36 @@ async def proxy_function_call(
         body = await request.body()
         headers = dict(request.headers)
 
-        host = headers.get('host')
+        host = headers.get("host")
 
-        headers.pop('host', None)
+        headers.pop("host", None)
         logger.info(f"Function call request host: {host}")
 
-        trajectory_path = request.query_params.get('trajectory_path')
+        trajectory_path = request.query_params.get("trajectory_path")
         params = {}
         if trajectory_path:
-            params['trajectory_path'] = trajectory_path
+            params["trajectory_path"] = trajectory_path
 
         async with httpx.AsyncClient(timeout=600.0) as client:
             response = await client.post(registry_url, content=body, headers=headers, params=params)
 
             response_headers = dict(response.headers)
-            response_headers.pop('content-length', None)
-            response_headers.pop('transfer-encoding', None)
+            response_headers.pop("content-length", None)
+            response_headers.pop("transfer-encoding", None)
 
             return JSONResponse(
                 content=response.json()
-                if response.headers.get('content-type', '').startswith('application/json')
+                if response.headers.get("content-type", "").startswith("application/json")
                 else response.text,
                 status_code=response.status_code,
                 headers=response_headers,
             )
     except httpx.RequestError as e:
         logger.error(f"Error connecting to registry server: {e}")
-        raise HTTPException(status_code=503, detail=f"Registry service unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Registry service unavailable: {e!s}")
     except Exception as e:
         logger.error(f"Error proxying function call: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to proxy function call: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to proxy function call: {e!s}")
 
 
 def validate_input_length(text: str) -> None:
@@ -2766,7 +2886,7 @@ def validate_input_length(text: str) -> None:
         )
 
 
-async def get_query(request: Request) -> Union[str, ActionResponse]:
+async def get_query(request: Request) -> str | ActionResponse:
     """Parses the incoming request to extract the user query or action."""
     try:
         data = await request.json()
@@ -2783,17 +2903,21 @@ async def get_query(request: Request) -> Union[str, ActionResponse]:
         try:
             return ActionResponse(**data)
         except ValidationError as e:
-            raise HTTPException(status_code=422, detail=f"Invalid ActionResponse JSON: {e.errors()}")
+            raise HTTPException(
+                status_code=422, detail=f"Invalid ActionResponse JSON: {e.errors()}"
+            )
     else:
         try:
             chat_obj = ChatRequest.model_validate(data)
             query_text = ""
             for mes in reversed(chat_obj.messages):
-                if mes['role'] == 'user':
-                    query_text = mes['content']
+                if mes["role"] == "user":
+                    query_text = mes["content"]
                     break
             if not query_text.strip():
-                raise HTTPException(status_code=422, detail="No user message found or content is empty.")
+                raise HTTPException(
+                    status_code=422, detail="No user message found or content is empty."
+                )
             validate_input_length(query_text)
             return query_text
         except ValidationError as e:
@@ -2824,4 +2948,6 @@ async def serve_react(full_path: str, request: Request):
     if os.path.exists(index_path):
         return FileResponse(index_path)
 
-    raise HTTPException(status_code=404, detail="Frontend files not found. Did you run the build process?")
+    raise HTTPException(
+        status_code=404, detail="Frontend files not found. Did you run the build process?"
+    )

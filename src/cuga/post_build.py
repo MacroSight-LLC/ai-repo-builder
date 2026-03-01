@@ -186,9 +186,7 @@ def check_spec_completeness(project_dir: Path, spec: dict) -> list[str]:
     structure = spec.get("structure", {})
     if isinstance(structure, dict):
         raw_files = structure.get("files") or []
-        expected_files = [
-            f.get("path", "") if isinstance(f, dict) else str(f) for f in raw_files
-        ]
+        expected_files = [f.get("path", "") if isinstance(f, dict) else str(f) for f in raw_files]
     elif isinstance(structure, list):
         expected_files = structure
     else:
@@ -426,9 +424,7 @@ def validate_migrations(project_dir: Path) -> dict[str, object]:
         result["has_orm"] = True
         result["orm_type"] = "sqlalchemy/alembic"
         versions_dir = alembic_dir / "versions" if alembic_dir.exists() else None
-        result["has_migrations"] = bool(
-            versions_dir and any(versions_dir.glob("*.py"))
-        )
+        result["has_migrations"] = bool(versions_dir and any(versions_dir.glob("*.py")))
         result["migration_dir"] = str(alembic_dir) if alembic_dir.exists() else None
         return result
 
@@ -440,9 +436,7 @@ def validate_migrations(project_dir: Path) -> dict[str, object]:
         result["has_orm"] = True
         result["orm_type"] = "django"
         result["has_migrations"] = len(migration_dirs) > 0
-        result["migration_dir"] = (
-            str(migration_dirs[0].parent) if migration_dirs else None
-        )
+        result["migration_dir"] = str(migration_dirs[0].parent) if migration_dirs else None
         return result
 
     # Prisma
@@ -451,9 +445,7 @@ def validate_migrations(project_dir: Path) -> dict[str, object]:
         migrations_dir = project_dir / "prisma" / "migrations"
         result["has_orm"] = True
         result["orm_type"] = "prisma"
-        result["has_migrations"] = migrations_dir.exists() and any(
-            migrations_dir.iterdir()
-        )
+        result["has_migrations"] = migrations_dir.exists() and any(migrations_dir.iterdir())
         result["migration_dir"] = str(migrations_dir)
         return result
 
@@ -519,9 +511,7 @@ def post_build_validate(project_dir: Path, spec: dict) -> dict:
     if smells:
         logger.warning("{} LLM code smells detected:", len(smells))
         for s in smells[:20]:  # cap log output
-            logger.warning(
-                "  {}:{} — {} | {}", s["file"], s["line"], s["issue"], s["code"]
-            )
+            logger.warning("  {}:{} — {} | {}", s["file"], s["line"], s["issue"], s["code"])
         if len(smells) > 20:
             logger.warning("  ... and {} more", len(smells) - 20)
     else:
@@ -557,9 +547,7 @@ def check_required_files(project_dir: Path) -> tuple[list[str], list[str]]:
     tuple of (missing_required, missing_recommended)
     """
     missing_required = [f for f in REQUIRED_FILES if not (project_dir / f).exists()]
-    missing_recommended = [
-        f for f in RECOMMENDED_FILES if not (project_dir / f).exists()
-    ]
+    missing_recommended = [f for f in RECOMMENDED_FILES if not (project_dir / f).exists()]
     return missing_required, missing_recommended
 
 
@@ -617,9 +605,7 @@ def validate_project(project_dir: Path, spec: dict | None = None) -> dict:
             syntax_errors.append(
                 {
                     "file": parts[0] if len(parts) > 0 else "?",
-                    "line": int(parts[1])
-                    if len(parts) > 1 and parts[1].strip().isdigit()
-                    else 0,
+                    "line": int(parts[1]) if len(parts) > 1 and parts[1].strip().isdigit() else 0,
                     "issue": parts[2].strip() if len(parts) > 2 else e,
                 }
             )
@@ -634,9 +620,7 @@ def validate_project(project_dir: Path, spec: dict | None = None) -> dict:
 
     # Determine pass/fail
     error_smells = [s for s in smells if s.get("severity") == "error"]
-    passed = (
-        len(syntax_errors) == 0 and len(error_smells) == 0 and len(missing_req) == 0
-    )
+    passed = len(syntax_errors) == 0 and len(error_smells) == 0 and len(missing_req) == 0
 
     # Build summary
     lines: list[str] = []
