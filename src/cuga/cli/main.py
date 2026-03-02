@@ -485,10 +485,22 @@ def wait_for_direct_processes():
         stop_direct_processes()
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        from cuga import __version__
+
+        typer.echo(f"cuga {__version__}")
+        raise typer.Exit()
+
+
 @app.callback()
 def callback(
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Enable verbose output with detailed logging information"
+    ),
+    version: bool = typer.Option(
+        False, "--version", "-V", help="Show version and exit",
+        callback=_version_callback, is_eager=True,
     ),
 ):
     """

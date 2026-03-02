@@ -805,11 +805,11 @@ def post_build_validate(project_dir: Path, spec: dict) -> dict:
 # ── Required files check ──────────────────────────────────────
 
 REQUIRED_FILES = [
-    ".gitignore",
     "README.md",
 ]
 
 RECOMMENDED_FILES = [
+    ".gitignore",
     ".env.example",
     "Dockerfile",
     "pyproject.toml",

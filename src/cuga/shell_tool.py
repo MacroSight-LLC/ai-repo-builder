@@ -22,21 +22,68 @@ from pydantic import BaseModel, Field
 
 ALLOWED_COMMANDS = {
     # Python ecosystem
-    "python", "python3", "pip", "pip3", "uv", "ruff", "mypy", "pytest",
-    "black", "isort", "alembic", "flask", "uvicorn", "gunicorn", "celery",
+    "python",
+    "python3",
+    "pip",
+    "pip3",
+    "uv",
+    "ruff",
+    "mypy",
+    "pytest",
+    "black",
+    "isort",
+    "alembic",
+    "flask",
+    "uvicorn",
+    "gunicorn",
+    "celery",
     # Node ecosystem
-    "node", "npm", "npx", "pnpm", "yarn", "tsc", "eslint", "prettier",
-    "next", "vite",
+    "node",
+    "npm",
+    "npx",
+    "pnpm",
+    "yarn",
+    "tsc",
+    "eslint",
+    "prettier",
+    "next",
+    "vite",
     # System utilities
-    "cat", "ls", "head", "tail", "wc", "grep", "find", "mkdir", "cp",
-    "mv", "touch", "echo", "pwd", "env", "which", "tree", "diff", "sort",
-    "uniq", "sed", "awk", "tr", "cut", "xargs", "chmod",
+    "cat",
+    "ls",
+    "head",
+    "tail",
+    "wc",
+    "grep",
+    "find",
+    "mkdir",
+    "cp",
+    "mv",
+    "touch",
+    "echo",
+    "pwd",
+    "env",
+    "which",
+    "tree",
+    "diff",
+    "sort",
+    "uniq",
+    "sed",
+    "awk",
+    "tr",
+    "cut",
+    "xargs",
+    "chmod",
     # Build & container
-    "docker", "docker-compose", "make", "cmake",
+    "docker",
+    "docker-compose",
+    "make",
+    "cmake",
     # Version control
     "git",
     # Network (read-only)
-    "curl", "wget",
+    "curl",
+    "wget",
 }
 
 BLOCKED_PATTERNS = [
@@ -46,8 +93,6 @@ BLOCKED_PATTERNS = [
     "> /dev/",
     "| sh",
     "| bash",
-    "eval ",
-    "exec ",
     "; rm ",
     "&& rm -rf",
     "mkfs",
@@ -55,12 +100,21 @@ BLOCKED_PATTERNS = [
     ":(){ :|:",
 ]
 
+# Patterns matched as whole first-word commands (not substrings) to avoid
+# false positives like "docker exec" or "npm run evaluate".
+_BLOCKED_FIRST_WORD = {"eval", "exec"}
+
 
 def _validate_command(command: str) -> str | None:
     """Return an error message if the command is unsafe, else None."""
     for pattern in BLOCKED_PATTERNS:
         if pattern in command:
             return f"Blocked: command contains dangerous pattern '{pattern}'"
+
+    # Check first-word blocks (e.g. bare "eval" / "exec" as the command)
+    first_word = command.strip().split()[0] if command.strip() else ""
+    if first_word in _BLOCKED_FIRST_WORD:
+        return f"Blocked: '{first_word}' as a direct command is not allowed"
 
     # Extract the base command (first word)
     try:
@@ -81,6 +135,7 @@ def _validate_command(command: str) -> str | None:
 
 
 # ── Tool implementation ──────────────────────────────────────────
+
 
 class ShellInput(BaseModel):
     command: str = Field(description="The shell command to execute")
@@ -123,7 +178,7 @@ def _smart_truncate(text: str, max_chars: int) -> str:
     lines = text.splitlines()
     if len(lines) <= 60:
         # Short enough to keep head + tail approach
-        return text[:max_chars // 2] + "\n...[truncated]...\n" + text[-(max_chars // 3):]
+        return text[: max_chars // 2] + "\n...[truncated]...\n" + text[-(max_chars // 3) :]
 
     head_count = 20
     tail_count = 30
@@ -145,7 +200,9 @@ def _smart_truncate(text: str, max_chars: int) -> str:
     # Assemble
     parts = head
     if error_lines:
-        parts.append(f"\n...[{len(middle) - len(error_lines)} lines truncated — showing errors]...\n")
+        parts.append(
+            f"\n...[{len(middle) - len(error_lines)} lines truncated — showing errors]...\n"
+        )
         parts.extend(error_lines)
     else:
         parts.append(f"\n...[{len(middle)} lines truncated]...\n")
@@ -154,7 +211,7 @@ def _smart_truncate(text: str, max_chars: int) -> str:
     result = "\n".join(parts)
     # Final safety trim if still over budget
     if len(result) > max_chars:
-        result = result[:max_chars - 50] + "\n...[final truncation]..."
+        result = result[: max_chars - 50] + "\n...[final truncation]..."
     return result
 
 
@@ -181,7 +238,8 @@ async def _execute_shell(command: str, working_dir: str = "") -> str:
             env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
         )
         stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=120,
+            proc.communicate(),
+            timeout=120,
         )
 
         result_parts = []
@@ -207,12 +265,14 @@ async def _execute_shell(command: str, working_dir: str = "") -> str:
 
 def _sync_execute_shell(command: str, working_dir: str = "") -> str:
     """Sync wrapper for the shell tool."""
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
+    try:
+        asyncio.get_running_loop()
         import concurrent.futures
+
         with concurrent.futures.ThreadPoolExecutor() as pool:
             return pool.submit(asyncio.run, _execute_shell(command, working_dir)).result()
-    return loop.run_until_complete(_execute_shell(command, working_dir))
+    except RuntimeError:
+        return asyncio.run(_execute_shell(command, working_dir))
 
 
 def create_shell_tool() -> StructuredTool:

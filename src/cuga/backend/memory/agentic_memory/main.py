@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import os
 import uvicorn
 
 from typing import Annotated
@@ -21,13 +24,13 @@ from pydantic.json_schema import SkipJsonSchema
 load_dotenv(override=True)
 
 logger = Logging.get_logger()
-app = FastAPI(debug=True)
+app = FastAPI(debug=os.getenv("DEBUG", "false").lower() == "true")
 app.openapi_version = '3.0.3'
 
 # Add CORS middleware to handle preflight OPTIONS requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),  # Override via CORS_ORIGINS env var
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods including OPTIONS
     allow_headers=["*"],  # Allow all headers

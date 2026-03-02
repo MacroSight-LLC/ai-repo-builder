@@ -40,11 +40,6 @@ export function StatusBar({ threadId }: StatusBarProps) {
   const examplesPopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const modePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Log threadId changes for debugging
-  useEffect(() => {
-    console.log('[StatusBar] threadId updated:', threadId);
-  }, [threadId]);
-
   useEffect(() => {
     loadTools();
     loadSubAgents();

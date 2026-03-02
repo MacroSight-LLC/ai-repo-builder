@@ -29,6 +29,9 @@ USER 1001
 
 EXPOSE 7860
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:7860/health || exit 1
+
 # Runtime config
 ENV CUGA_HOST=0.0.0.0
 ENV DYNACONF_SERVER_PORTS__DEMO=7860

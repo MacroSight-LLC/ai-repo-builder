@@ -79,13 +79,15 @@ def create_tools_from_mcp_manager(manager) -> list[StructuredTool]:
                         if i < len(pnames):
                             kwargs[pnames[i]] = val
                     kwargs.pop("_placeholder", None)
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
+                    try:
+                        asyncio.get_running_loop()
+                        # Already inside an event loop — run in a thread
                         import concurrent.futures
 
                         with concurrent.futures.ThreadPoolExecutor() as pool:
                             return pool.submit(asyncio.run, _call(**kwargs)).result()
-                    return loop.run_until_complete(_call(**kwargs))
+                    except RuntimeError:
+                        return asyncio.run(_call(**kwargs))
 
                 return _call, _sync_call
 

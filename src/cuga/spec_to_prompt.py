@@ -104,7 +104,7 @@ def spec_to_prompt(
     # ── Stack ──────────────────────────────────────────────────
     parts.append("\n## Technology Stack")
     parts.append(f"- Language: {stack.get('language', 'python')}")
-    parts.append(f"- Runtime: {stack.get('runtime', 'python3.11')}")
+    parts.append(f"- Runtime: {stack.get('runtime', 'python3.12')}")
 
     backend = stack.get("backend", {})
     if backend:

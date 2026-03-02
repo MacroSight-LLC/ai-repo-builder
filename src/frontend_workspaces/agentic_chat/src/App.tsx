@@ -91,12 +91,6 @@ export function App() {
 
   // Handle variables updates from CustomChat
   const handleVariablesUpdate = useCallback((variables: Record<string, any>, history: Array<any>) => {
-    console.log('[App] handleVariablesUpdate called');
-    console.log('[App] Variables keys:', Object.keys(variables));
-    console.log('[App] History length:', history.length);
-    console.log('[App] Previous variables count:', previousVariablesCount);
-    console.log('[App] Previous history length:', previousHistoryLength);
-
     const currentVariablesCount = Object.keys(variables).length;
     const currentHistoryLength = history.length;
 
@@ -108,7 +102,6 @@ export function App() {
     const hasNewHistory = currentHistoryLength > previousHistoryLength;
 
     if (hasNewVariables || hasNewHistory) {
-      console.log('[App] Switching to variables tab - new data detected');
       setActiveTab("variables");
     }
 
@@ -119,15 +112,11 @@ export function App() {
 
   // Handle message sent from CustomChat
   const handleMessageSent = useCallback((message: string) => {
-    console.log('[App] handleMessageSent called with message:', message);
-    console.log('[App] leftSidebarRef.current:', leftSidebarRef.current);
     // Add a new conversation to the left sidebar
     if (leftSidebarRef.current) {
       const title = message.length > 50 ? message.substring(0, 50) + "..." : message;
-      console.log('[App] Calling addConversation with title:', title);
       leftSidebarRef.current.addConversation(title);
-    } else {
-      console.log('[App] leftSidebarRef.current is null');
+    }
     }
     // Switch to conversations tab to show the new conversation
     setActiveTab("conversations");

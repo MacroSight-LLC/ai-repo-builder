@@ -88,8 +88,9 @@ if command -v docker &>/dev/null; then
     echo "✅ Database containers started" || \
     echo "⚠️  Docker Compose unavailable — database features may not work"
 
-  # Wait for Postgres
-  timeout 30 bash -c 'until docker compose exec -T postgres-dev pg_isready -U cuga 2>/dev/null; do sleep 1; done' \
+  # Wait for Postgres (portable: works on macOS without coreutils)
+  _timeout() { if command -v timeout &>/dev/null; then timeout "$@"; elif command -v gtimeout &>/dev/null; then gtimeout "$@"; else local secs=$1; shift; local end=$((SECONDS + secs)); while [ $SECONDS -lt $end ]; do "$@" && return 0; sleep 1; done; return 1; fi; }
+  _timeout 30 bash -c 'until docker compose exec -T postgres-dev pg_isready -U cuga 2>/dev/null; do sleep 1; done' \
     && echo "✅ PostgreSQL ready" \
     || echo "⚠️  PostgreSQL not ready (non-blocking)"
 else

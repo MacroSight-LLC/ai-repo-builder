@@ -11,6 +11,7 @@ import pytest
 from cuga.shell_tool import (
     ALLOWED_COMMANDS,
     BLOCKED_PATTERNS,
+    _BLOCKED_FIRST_WORD,
     _execute_shell,
     _validate_command,
     create_shell_tool,
@@ -152,7 +153,9 @@ class TestAllowedCommandsSet:
     def test_blocked_patterns_cover_critical_dangers(self) -> None:
         assert "rm -rf /" in BLOCKED_PATTERNS
         assert "sudo " in BLOCKED_PATTERNS
-        assert "eval " in BLOCKED_PATTERNS
+        # eval/exec are blocked as first-word commands (not substring patterns)
+        assert "eval" in _BLOCKED_FIRST_WORD
+        assert "exec" in _BLOCKED_FIRST_WORD
 
 
 # ── _execute_shell tests ───────────────────────────────────────

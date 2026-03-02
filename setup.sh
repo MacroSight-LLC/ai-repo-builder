@@ -138,7 +138,7 @@ echo "7/7  Verifying installation..."
 VERIFY_FAILED=0
 python -c "from cuga.generate import main; print('     ✅ Pipeline imports OK')" 2>/dev/null || {
     echo "     ❌ Pipeline import failed"
-    ERRORS+=("Run: pip install -e '.[dev]'")
+    ERRORS+=("Run: uv sync --group dev")
     VERIFY_FAILED=1
 }
 if [ "$VERIFY_FAILED" -eq 0 ]; then
@@ -167,13 +167,16 @@ else
     echo "  ✅ Setup complete!"
     echo ""
     echo "  Quick start:"
-    echo "    ./build.sh \"Build me a REST API for managing invoices\""
+    echo "    python -m cuga.generate \"Build me a REST API for managing invoices\""
     echo ""
     echo "  With GitHub repo:"
-    echo "    ./build.sh --github \"Build me a task manager API\""
+    echo "    python -m cuga.generate --github \"Build me a task manager API\""
     echo ""
     echo "  Dry run (preview prompt):"
-    echo "    ./build.sh --dry-run \"A CLI calculator\""
+    echo "    python -m cuga.generate --dry-run \"A CLI calculator\""
+    echo ""
+    echo "  CLI start:"
+    echo "    cuga start demo"
     echo ""
     echo "  See all options:"
     echo "    ./build.sh --help"

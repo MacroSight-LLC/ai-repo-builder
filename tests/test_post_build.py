@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -190,8 +191,8 @@ class TestCheckRequiredFiles:
 
     def test_missing_gitignore(self, tmp_path: Path) -> None:
         (tmp_path / "README.md").write_text("# Hi\n")
-        missing_req, _ = check_required_files(tmp_path)
-        assert ".gitignore" in missing_req
+        _, missing_rec = check_required_files(tmp_path)
+        assert ".gitignore" in missing_rec
 
     def test_missing_readme(self, tmp_path: Path) -> None:
         (tmp_path / ".gitignore").write_text("*.pyc\n")
@@ -223,6 +224,7 @@ class TestFixIndentation:
 
 
 class TestRunRuffCheck:
+    @pytest.mark.skipif(shutil.which("ruff") is None, reason="ruff not installed")
     def test_clean_code_passes(self, project_dir: Path) -> None:
         code, _output = run_ruff_check(project_dir)
         assert code == 0

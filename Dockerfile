@@ -38,6 +38,9 @@ COPY docs/examples/huggingface/email_template.md /app/cuga_workspace/email_templ
 # Expose port 7860 (Hugging Face Spaces default)
 EXPOSE 7860
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:7860/health || exit 1
+
 # Set host to 0.0.0.0 to allow external connections
 ENV CUGA_HOST=0.0.0.0
 
@@ -46,4 +49,3 @@ ENV DYNACONF_SERVER_PORTS__DEMO=7860
 
 # Start the demo_crm service with read-only filesystem and no email services
 CMD ["uv", "run", "cuga", "start", "manager", "--host", "0.0.0.0", "--crm", "--email", "--filesystem", "--cuga-workspace", "/app/cuga_workspace"]
-

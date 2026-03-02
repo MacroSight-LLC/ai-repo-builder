@@ -182,31 +182,94 @@ def _inject_github_config(spec: dict, args: argparse.Namespace) -> dict:
 # ── Stage 1: NL → Spec ────────────────────────────────────────────
 
 
+def _create_spec_llm():
+    """Instantiate the LLM for spec generation based on available env vars.
+
+    Detection order:
+      1. ``WATSONX_API_KEY`` + ``WATSONX_PROJECT_ID`` → ChatWatsonx
+      2. ``GROQ_API_KEY`` → ChatGroq (if installed) or ChatOpenAI via Groq endpoint
+      3. ``OPENAI_API_KEY`` → ChatOpenAI (also supports any OpenAI-compatible API)
+      4. Nothing set → helpful error and exit.
+    """
+    model_override = os.environ.get("SPEC_MODEL")
+
+    # --- WatsonX ---
+    if os.environ.get("WATSONX_API_KEY") and os.environ.get("WATSONX_PROJECT_ID"):
+        from langchain_ibm import ChatWatsonx
+
+        model_id = model_override or "meta-llama/llama-4-maverick-17b-128e-instruct-fp8"
+        logger.info("Spec LLM: WatsonX ({})", model_id)
+        return ChatWatsonx(
+            model_id=model_id,
+            temperature=0.3,
+            max_tokens=16_000,
+            project_id=os.environ["WATSONX_PROJECT_ID"],
+        )
+
+    # --- Groq ---
+    if os.environ.get("GROQ_API_KEY"):
+        try:
+            from langchain_groq import ChatGroq
+
+            model = model_override or "llama-3.3-70b-versatile"
+            logger.info("Spec LLM: Groq ({})", model)
+            return ChatGroq(model=model, temperature=0.3, max_tokens=16_000)
+        except ImportError:
+            from langchain_openai import ChatOpenAI
+
+            model = model_override or "llama-3.3-70b-versatile"
+            logger.info("Spec LLM: Groq via OpenAI compat ({})", model)
+            return ChatOpenAI(
+                model=model,
+                temperature=0.3,
+                max_tokens=16_000,
+                api_key=os.environ["GROQ_API_KEY"],
+                base_url="https://api.groq.com/openai/v1",
+            )
+
+    # --- OpenAI / OpenAI-compatible ---
+    if os.environ.get("OPENAI_API_KEY"):
+        from langchain_openai import ChatOpenAI
+
+        model = model_override or "gpt-4o"
+        base_url = os.environ.get("OPENAI_BASE_URL")
+        logger.info("Spec LLM: OpenAI ({}{})", model, f" @ {base_url}" if base_url else "")
+        kwargs: dict[str, Any] = dict(model=model, temperature=0.3, max_tokens=16_000)
+        if base_url:
+            kwargs["base_url"] = base_url
+        return ChatOpenAI(**kwargs)
+
+    # --- Nothing configured ---
+    logger.error(
+        "No LLM provider configured for spec generation.\n"
+        "Set one of the following in your .env file:\n"
+        "  • WATSONX_API_KEY + WATSONX_PROJECT_ID  (IBM WatsonX)\n"
+        "  • OPENAI_API_KEY                         (OpenAI / compatible)\n"
+        "  • GROQ_API_KEY                           (Groq)\n"
+        "See .env.example for details."
+    )
+    sys.exit(1)
+
+
 async def generate_spec(
     user_input: str,
     max_retries: int = 3,
 ) -> dict:
-    """Use WatsonX to convert plain English into a validated YAML spec.
+    """Convert plain English into a validated YAML spec using the configured LLM.
+
+    Supports multiple providers via environment variables:
+      - **WatsonX**: set ``WATSONX_API_KEY`` + ``WATSONX_PROJECT_ID``
+      - **OpenAI** (or compatible): set ``OPENAI_API_KEY`` (and optionally ``OPENAI_BASE_URL``)
+      - **Groq**: set ``GROQ_API_KEY``
+
+    ``SPEC_MODEL`` overrides the default model for any provider.
 
     Includes a self-correction loop: if the spec fails validation the
     errors are fed back and the LLM tries again (up to *max_retries*).
     """
     from langchain_core.messages import HumanMessage, SystemMessage
-    from langchain_ibm import ChatWatsonx
 
-    llm = ChatWatsonx(
-        model_id=os.environ.get(
-            "SPEC_MODEL",
-            "meta-llama/llama-4-maverick-17b-128e-instruct-fp8",
-        ),
-        temperature=0.3,
-        max_tokens=16_000,
-        project_id=os.environ.get("WATSONX_PROJECT_ID", ""),
-    )
-
-    if not os.environ.get("WATSONX_PROJECT_ID"):
-        logger.error("WATSONX_PROJECT_ID env var is not set — cannot call WatsonX")
-        sys.exit(1)
+    llm = _create_spec_llm()
 
     messages = [
         SystemMessage(content=SPEC_SYSTEM_PROMPT),

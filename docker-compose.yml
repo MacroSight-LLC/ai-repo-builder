@@ -165,11 +165,12 @@ services:
       - "3000:3000"
     environment:
       - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
-      - NEXTAUTH_SECRET=your-secret-here
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-please-change-me-in-dotenv}
       - NEXTAUTH_URL=http://localhost:3000
-      - SALT=your-salt-here
+      - SALT=${SALT:-please-change-me-in-dotenv}
     depends_on:
-      - langfuse-db
+      langfuse-db:
+        condition: service_healthy
     networks:
       - mcp-net
     restart: unless-stopped
@@ -181,6 +182,11 @@ services:
       - POSTGRES_USER=langfuse
       - POSTGRES_PASSWORD=langfuse
       - POSTGRES_DB=langfuse
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     volumes:
       - langfuse-db-data:/var/lib/postgresql/data
     networks:

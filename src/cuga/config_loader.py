@@ -104,8 +104,8 @@ def load_mcp_servers(path: str = "mcp_servers_local.yaml") -> dict[str, Any]:
             msg = f"MCP server '{name}' must be a mapping, got {type(server_config).__name__}"
             raise yaml.YAMLError(msg)
 
-        if "command" not in server_config:
-            logger.warning("MCP server '{}' has no 'command' — may not start", name)
+        if "command" not in server_config and "url" not in server_config:
+            logger.warning("MCP server '{}' has no 'command' or 'url' — may not start", name)
 
         args = server_config.get("args")
         if args is not None and not isinstance(args, list):

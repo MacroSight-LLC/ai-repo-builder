@@ -520,7 +520,6 @@ def mine_lessons(
         # Write to optimizations.yaml
         if "by_pattern" not in opts:
             opts["by_pattern"] = {}
-        opts[pattern_name] = new_entry
         opts["by_pattern"][pattern_name] = new_entry
         new_lessons.append({"pattern": pattern_name, **new_entry})
 
