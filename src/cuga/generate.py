@@ -277,6 +277,7 @@ async def generate_spec(
     ]
 
     spec: dict | None = None
+    errors_str: str = ""
 
     for attempt in range(1, max_retries + 1):
         logger.info("Stage 1 — generating spec (attempt {}/{})", attempt, max_retries)
@@ -343,7 +344,9 @@ async def generate_spec(
     # Exhausted retries — return best-effort spec if we got one
     logger.error("Failed to produce a valid spec after {} attempts", max_retries)
     if spec is not None:
-        logger.warning("Returning last (invalid) spec for manual review")
+        logger.warning("Returning last spec with validation warnings for manual review")
+        if errors_str:
+            logger.error("Unresolved validation errors:\n{}", errors_str)
         return spec
     sys.exit(1)
 

@@ -179,7 +179,7 @@ class ChromeExtensionWebSocketServer:
             # Clean up on error
             if request_id in self.pending_requests:
                 del self.pending_requests[request_id]
-            raise e
+            raise
 
     def is_connected(self) -> bool:
         """Check if any Chrome extension is connected"""

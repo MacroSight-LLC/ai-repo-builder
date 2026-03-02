@@ -32,17 +32,15 @@ export function generateUUID(): string {
   });
 }
 
-let currentThreadId: string | null = null;
-
-function resetThreadId() {
-  currentThreadId = null;
-}
+// Thread ID is managed per component instance via useRef (see inside CarbonChat).
+// Module-level mirror kept in sync so customSendMessage.ts can import getOrCreateThreadId.
+let _activeThreadId: string | null = null;
 
 export function getOrCreateThreadId(): string {
-  if (!currentThreadId) {
-    currentThreadId = generateUUID();
+  if (!_activeThreadId) {
+    _activeThreadId = generateUUID();
   }
-  return currentThreadId;
+  return _activeThreadId;
 }
 
 const DEFAULT_HOMESCREEN = {
@@ -84,6 +82,17 @@ const CarbonChat = ({
   const starterLabels = (hs.starters ?? DEFAULT_HOMESCREEN.starters ?? []).filter(Boolean).slice(0, 4);
   const chatInstanceRef = useRef<ChatInstance | null>(null);
   const skipNextHistoryLoadRef = useRef(false);
+  const threadIdRef = useRef<string | null>(null);
+
+  // Thread ID helpers (per-instance, synced to module-level for customSendMessage)
+  const resetThreadId = useCallback(() => { threadIdRef.current = null; _activeThreadId = null; }, []);
+  const getOrCreateThreadIdLocal = useCallback(() => {
+    if (!threadIdRef.current) {
+      threadIdRef.current = getOrCreateThreadId();
+    }
+    _activeThreadId = threadIdRef.current;
+    return threadIdRef.current;
+  }, []);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
   const [debugData, setDebugData] = useState<any>(null);
   const [isLoadingDebug, setIsLoadingDebug] = useState(false);
@@ -112,7 +121,7 @@ const CarbonChat = ({
     setIsLoadingDebug(true);
     setDebugError(null);
     try {
-      const activeThreadId = currentThreadId || getOrCreateThreadId();
+      const activeThreadId = threadIdRef.current || getOrCreateThreadIdLocal();
       const response = await api.getAgentState(activeThreadId);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -147,9 +156,9 @@ const CarbonChat = ({
     ) => {
       const result = await customSendMessageImpl(request, options, instance, useDraft, disableHistory);
       
-      if (onThreadChange && currentThreadId) {
+      if (onThreadChange && threadIdRef.current) {
         skipNextHistoryLoadRef.current = true;
-        onThreadChange(currentThreadId);
+        onThreadChange(threadIdRef.current);
       }
       
       return result;
@@ -172,7 +181,7 @@ const CarbonChat = ({
     instance.on({
       type: BusEventType.STOP_STREAMING,
       handler: () => {
-        const tid = getOrCreateThreadId();
+        const tid = getOrCreateThreadIdLocal();
         console.log('[CarbonChat] STOP_STREAMING event received, calling /stop for thread:', tid);
         stopCugaAgent(tid);
       },
@@ -214,7 +223,8 @@ const CarbonChat = ({
   useEffect(() => {
     if (chatInstanceRef.current) {
       if (threadId) {
-        currentThreadId = threadId;
+        threadIdRef.current = threadId;
+        _activeThreadId = threadId;
         if (skipNextHistoryLoadRef.current) {
           skipNextHistoryLoadRef.current = false;
           return;
@@ -245,7 +255,8 @@ const CarbonChat = ({
       } else {
         // If threadId is null, start a fresh conversation
         console.log('Starting new conversation');
-        currentThreadId = null;
+        threadIdRef.current = null;
+        _activeThreadId = null;
         chatInstanceRef.current.messaging.clearConversation();
       }
     }
@@ -296,7 +307,7 @@ const CarbonChat = ({
               <div className="debug-data">
                 <div className="debug-section">
                   <strong>Thread ID:</strong>
-                  <code>{currentThreadId || 'None'}</code>
+                  <code>{threadIdRef.current || 'None'}</code>
                 </div>
                 {lastUpdateTime && (
                   <div className="debug-section">

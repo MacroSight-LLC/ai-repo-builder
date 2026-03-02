@@ -1,5 +1,6 @@
 import React from "react";
 import { marked } from "marked";
+import { sanitizeHtml } from "./sanitize";
 import "./VariablePopup.css";
 
 interface VariablePopupProps {
@@ -77,7 +78,7 @@ const VariablePopup: React.FC<VariablePopupProps> = ({ variable, onClose }) => {
         </div>
         <div
           className="variable-popup-body"
-          dangerouslySetInnerHTML={{ __html: marked(formattedContent) }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(marked(formattedContent) as string) }}
         />
       </div>
     </div>

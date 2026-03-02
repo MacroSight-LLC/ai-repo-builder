@@ -165,9 +165,9 @@ services:
       - "3000:3000"
     environment:
       - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-please-change-me-in-dotenv}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in .env}
       - NEXTAUTH_URL=http://localhost:3000
-      - SALT=${SALT:-please-change-me-in-dotenv}
+      - SALT=${SALT:?Set SALT in .env}
     depends_on:
       langfuse-db:
         condition: service_healthy

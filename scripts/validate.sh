@@ -6,26 +6,26 @@ PASS=true
 
 # Python tests
 echo "→ Running pytest..."
-if ! python -m pytest tests/ -q --tb=short 2>/dev/null; then
+if ! python -m pytest tests/ -q --tb=short; then
   echo "❌ Tests failed"
   PASS=false
 fi
 
 # Linting
 echo "→ Running linting..."
-if ! python -m ruff check src/ 2>/dev/null; then
+if ! python -m ruff check src/; then
   echo "⚠️  Linting issues found"
 fi
 
 # Type check
 echo "→ Running type check..."
-if ! python -m mypy src/ --ignore-missing-imports -q 2>/dev/null; then
+if ! python -m mypy src/ --ignore-missing-imports -q; then
   echo "⚠️  Type check issues found"
 fi
 
 # Docker build check
 echo "→ Checking Docker build..."
-if ! docker build -q . 2>/dev/null; then
+if ! docker build -q .; then
   echo "❌ Docker build failed"
   PASS=false
 fi

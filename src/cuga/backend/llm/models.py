@@ -513,7 +513,7 @@ class LLMManager:
             #     google_params["api_key"] = os.environ.get(apikey_name)
 
             llm = ChatGoogleGenerativeAI(
-                api_key=os.environ.get("GOOGLE_API_kEY"),
+                api_key=os.environ.get("GOOGLE_API_KEY"),
                 model=model_name,
                 temperature=temperature,
                 max_tokens=max_tokens,
@@ -557,6 +557,7 @@ class LLMManager:
                 import litellm
 
                 litellm.ssl_verify = False
+                logger.warning("LiteLLM SSL verification disabled via OPENAI_SSL_VERIFY")
 
             litellm_params: Dict[str, Any] = {
                 "model": model_name,

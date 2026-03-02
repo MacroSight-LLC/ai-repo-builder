@@ -1,0 +1,296 @@
+name: task-manager-app
+description: A full-stack task manager application with Next.js frontend and FastAPI backend, featuring JWT authentication
+  and PostgreSQL database.
+version: 0.1.0
+stack:
+  language: typescript
+  runtime: node20
+  frontend:
+    framework: nextjs
+    styling: tailwind
+    state: zustand
+  backend:
+    framework: fastapi
+    api_style: rest
+    language: python
+    runtime: python3.11
+  database:
+    primary: postgresql
+    orm: sqlalchemy
+    cache: redis
+  infrastructure:
+    containerization: docker
+    ci_cd: github-actions
+    hosting: docker-compose
+structure:
+  files:
+  - path: frontend/next.config.js
+    purpose: Next.js configuration file
+    key_contents:
+    - 'const nextConfig = { reactStrictMode: true, experimental: { appDir: true } };'
+    - module.exports = nextConfig;
+  - path: frontend/tailwind.config.js
+    purpose: Tailwind CSS configuration
+    key_contents:
+    - 'module.exports = { content: [''./app/**/*.{js,ts,jsx,tsx}''], theme: { extend: {} }, plugins: [] };'
+  - path: frontend/app/layout.tsx
+    purpose: Root layout component for the application
+    key_contents:
+    - import type { Metadata } from 'next';
+    - import { Inter } from 'next/font/google';
+    - import './globals.css';
+    - 'export const metadata: Metadata = { title: ''Task Manager'', description: ''Task management application'' };'
+    - 'export default function RootLayout({ children }: { children: React.ReactNode }) { return <html><body>{children}</body></html>;
+      }'
+  - path: frontend/app/page.tsx
+    purpose: Home page component
+    key_contents:
+    - import TaskList from '../components/TaskList';
+    - export default function Home() { return <TaskList />; }
+  - path: frontend/components/TaskList.tsx
+    purpose: Reusable task list component
+    key_contents:
+    - import { Task } from '../lib/api';
+    - 'interface TaskListProps { tasks: Task[]; }'
+    - 'const TaskList = ({ tasks }: TaskListProps) => { return <ul>{tasks.map(task => <li key={task.id}>{task.title}</li>)}</ul>;
+      };'
+    - export default TaskList;
+  - path: frontend/lib/api.ts
+    purpose: API client for backend interactions
+    key_contents:
+    - import axios from 'axios';
+    - 'const api = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL });'
+    - 'export interface Task { id: number; title: string; completed: boolean; }'
+    - export const getTasks = async () => { const response = await api.get('/tasks'); return response.data; };
+  - path: backend/main.py
+    purpose: FastAPI application entry point
+    key_contents:
+    - from fastapi import FastAPI
+    - from fastapi.middleware.cors import CORSMiddleware
+    - app = FastAPI(title='Task Manager API')
+    - app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
+    - from .routers import tasks, auth
+    - app.include_router(tasks.router, prefix='/api/v1/tasks')
+    - app.include_router(auth.router, prefix='/api/v1/auth')
+  - path: backend/routers/tasks.py
+    purpose: Task-related API routes
+    key_contents:
+    - from fastapi import APIRouter, Depends
+    - from .. import schemas, crud
+    - from ..database import get_db
+    - router = APIRouter()
+    - '@router.get(''/'', response_model=list[schemas.Task])'
+    - 'async def read_tasks(db = Depends(get_db)): return crud.get_tasks(db)'
+  - path: backend/auth.py
+    purpose: Authentication utilities
+    key_contents:
+    - from datetime import datetime, timedelta
+    - from jose import jwt, JWTError
+    - from passlib.context import CryptContext
+    - pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
+    - 'def verify_password(plain_password, hashed_password): return pwd_context.verify(plain_password, hashed_password)'
+    - 'def get_password_hash(password): return pwd_context.hash(password)'
+  - path: backend/database.py
+    purpose: Database connection and session management
+    key_contents:
+    - from sqlalchemy import create_engine
+    - from sqlalchemy.orm import sessionmaker
+    - from . import models
+    - SQLALCHEMY_DATABASE_URL = 'postgresql://user:password@db/taskmanager'
+    - engine = create_engine(SQLALCHEMY_DATABASE_URL)
+    - SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+  - path: backend/models.py
+    purpose: SQLAlchemy database models
+    key_contents:
+    - from sqlalchemy import Column, Integer, String, Boolean
+    - from .database import Base
+    - 'class Task(Base): __tablename__ = ''tasks''; id = Column(Integer, primary_key=True); title = Column(String, nullable=False);
+      completed = Column(Boolean, default=False)'
+  - path: backend/schemas.py
+    purpose: Pydantic schemas for request/response validation
+    key_contents:
+    - from pydantic import BaseModel
+    - 'class TaskBase(BaseModel): title: str; completed: bool = False'
+    - 'class Task(TaskBase): id: int; class Config: orm_mode = True'
+  - path: .env.example
+    purpose: Example environment variables file
+    key_contents:
+    - DATABASE_URL=postgresql://user:password@localhost/taskmanager
+    - JWT_SECRET_KEY=your-secret-key
+    - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+  - path: Dockerfile
+    purpose: Multi-stage Dockerfile for the application
+    key_contents:
+    - FROM python:3.11-slim AS backend-builder
+    - WORKDIR /app/backend
+    - COPY backend/requirements.txt .
+    - RUN pip install --no-cache-dir -r requirements.txt
+    - COPY backend/ .
+    - FROM node:20 AS frontend-builder
+    - WORKDIR /app/frontend
+    - COPY frontend/package*.json ./
+    - RUN npm install
+    - COPY frontend/ .
+    - RUN npm run build
+    - FROM python:3.11-slim AS production
+    - WORKDIR /app
+    - COPY --from=backend-builder /app/backend .
+    - COPY --from=frontend-builder /app/frontend/.next .next
+    - CMD uvicorn main:app --host 0.0.0.0 --port 8000
+  - path: docker-compose.yaml
+    purpose: Docker Compose configuration for local development
+    key_contents:
+    - 'version: ''3'''
+    - 'services: backend: build: ./backend; ports: [''8000:8000'']; depends_on: [db]'
+    - 'frontend: build: ./frontend; ports: [''3000:3000'']; depends_on: [backend]'
+    - 'db: image: postgres; environment: POSTGRES_USER: user; POSTGRES_PASSWORD: password; POSTGRES_DB: taskmanager'
+  - path: .github/workflows/ci.yaml
+    purpose: GitHub Actions CI/CD pipeline configuration
+    key_contents:
+    - 'name: CI/CD Pipeline'
+    - 'on: [push]'
+    - 'jobs: build: runs-on: ubuntu-latest; steps: - name: Checkout code; uses: actions/checkout@v3'
+    - '- name: Build and test; run: docker-compose build && docker-compose up -d && docker-compose exec backend pytest'
+pages:
+- path: /
+  name: Home
+  components:
+  - TaskList
+  data_source: /api/v1/tasks
+  auth: public
+- path: /login
+  name: Login
+  components:
+  - LoginForm
+  data_source: /api/v1/auth/login
+  auth: public
+components:
+- name: TaskList
+  type: widget
+  props:
+  - name: tasks
+    type: Task[]
+    required: true
+  state: []
+  children:
+  - TaskItem
+- name: TaskItem
+  type: widget
+  props:
+  - name: task
+    type: Task
+    required: true
+  state: []
+  children: []
+- name: LoginForm
+  type: form
+  props: []
+  state:
+  - username
+  - password
+  children: []
+features:
+- name: Task Management
+  type: crud
+  details:
+    endpoints:
+    - GET /api/v1/tasks - Retrieve all tasks
+    - POST /api/v1/tasks - Create a new task
+    - GET /api/v1/tasks/{task_id} - Retrieve a task by ID
+    - PUT /api/v1/tasks/{task_id} - Update a task
+    - DELETE /api/v1/tasks/{task_id} - Delete a task
+    business_logic:
+    - Tasks are stored in the PostgreSQL database
+    - Task titles are required and must be unique
+    validations:
+    - Task title must be between 1 and 100 characters
+    - Task completion status must be a boolean value
+data_model:
+  entities:
+  - name: Task
+    fields:
+    - name: id
+      type: Integer
+      constraints:
+      - primary_key
+    - name: title
+      type: String
+      constraints:
+      - nullable=False
+    - name: completed
+      type: Boolean
+      constraints:
+      - default=False
+    relationships: []
+  - name: User
+    fields:
+    - name: id
+      type: Integer
+      constraints:
+      - primary_key
+    - name: username
+      type: String
+      constraints:
+      - nullable=False
+      - unique=True
+    - name: password
+      type: String
+      constraints:
+      - nullable=False
+    relationships: []
+  migrations:
+    tool: alembic
+api:
+  base_path: /api/v1
+  auth_required: true
+  rate_limiting: 100/minute
+  response_format:
+    envelope: true
+    shape: '{"data": $response}'
+testing:
+  framework: pytest
+  coverage_target: 80
+  fixtures:
+  - test_db
+  - test_client
+  patterns:
+  - Unit tests for individual components
+  - Integration tests for API endpoints
+deployment:
+  docker:
+    multi_stage: true
+    base_image: python:3.11-slim
+    compose_services:
+    - name: backend
+      image: task-manager-backend
+      ports:
+      - 8000:8000
+    - name: frontend
+      image: task-manager-frontend
+      ports:
+      - 3000:3000
+    - name: db
+      image: postgres
+      ports:
+      - 5432:5432
+  ci_cd:
+    provider: github-actions
+    pipeline:
+    - Checkout code
+    - Build and test
+    - Deploy to production
+standards:
+  formatting: ruff
+  linting: ruff
+  typing: mypy
+  docstrings: google
+  git:
+    commit_convention: conventional
+security:
+  authentication: required
+  authorization: rbac
+  input_validation: strict
+  secrets: environment_variables_only
+  cors_origins:
+  - http://localhost:3000
+  dependency_scanning: github-dependabot

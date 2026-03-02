@@ -12,6 +12,10 @@ export function getApiBaseUrl(): string {
 
 let authConfigCache: { enabled: boolean } | null = null;
 
+export function clearAuthCache(): void {
+  authConfigCache = null;
+}
+
 export async function getAuthConfig(): Promise<{ enabled: boolean }> {
   if (authConfigCache !== null) return authConfigCache;
   const base = getApiBaseUrl();

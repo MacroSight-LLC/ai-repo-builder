@@ -104,7 +104,7 @@ async def _post_extract(page: playwright.async_api.Page):
             if any(msg in str(e) for msg in ("Frame was detached", "Frame has been detached")):
                 pass
             else:
-                raise e
+                raise
 
 
 def pop_bids_from_attribute(dom_snapshot, attr: str):

@@ -8,7 +8,7 @@ import subprocess
 import traceback
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -205,12 +205,6 @@ draft_app_state = DraftAppState()
 class ChatRequest(BaseModel):
     messages: list[dict[str, Any]]
     stream: bool = False
-
-
-def format_time_custom():
-    """Formats the current time as HH-MM-SS."""
-    now = datetime.datetime.now()
-    return f"{now.hour:02d}-{now.minute:02d}-{now.second:02d}"
 
 
 async def manage_save_reuse_server():
@@ -620,17 +614,16 @@ async def validate_and_sync_policies(storage, filesystem_sync):
             except Exception as e:
                 logger.error(f"Failed to remove policy '{policy_id}': {e}")
 
-        # 2. Save to filesystem if only in storage
-        policies_to_save_to_fs = storage_policy_ids - fs_policy_ids
-        for policy_id in policies_to_save_to_fs:
+        # 2. Add to storage if only on filesystem
+        policies_to_add = fs_policy_ids - storage_policy_ids
+        for policy_id in policies_to_add:
             try:
-                # Find the policy object
-                policy = next((p for p in storage_policies if p.id == policy_id), None)
+                policy = filesystem_sync.load_policy_from_file(policy_id)
                 if policy:
-                    filesystem_sync.save_policy_to_file(policy)
+                    await storage.save_policy(policy)
                     added_to_filesystem_count += 1
                     logger.info(
-                        f"💾 Saved policy '{policy_id}' to filesystem (was only in storage)"
+                        f"💾 Added policy '{policy_id}' to storage (was only on filesystem)"
                     )
             except Exception as e:
                 logger.error(f"Failed to save policy '{policy_id}' to filesystem: {e}")
@@ -733,7 +726,7 @@ async def save_conversation_to_db(
                     {
                         "role": role,
                         "content": msg.content if hasattr(msg, "content") else str(msg),
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "metadata": {"type": type(msg).__name__, "message_type": "chat_messages"},
                     }
                 )
@@ -750,7 +743,7 @@ async def save_conversation_to_db(
                         if isinstance(msg, AIMessage)
                         else "system",
                         "content": msg.content if hasattr(msg, "content") else str(msg),
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "metadata": {
                             "type": type(msg).__name__,
                             "message_type": "chat_agent_messages",
@@ -772,7 +765,7 @@ async def save_conversation_to_db(
                         if isinstance(msg, AIMessage)
                         else "system",
                         "content": msg.content if hasattr(msg, "content") else str(msg),
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "metadata": {
                             "type": type(msg).__name__,
                             "message_type": "supervisor_chat_messages",
@@ -917,7 +910,7 @@ async def event_stream(
             {
                 "event_name": "UserMessage",
                 "event_data": query,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "sequence": event_sequence,
             }
         )
@@ -1103,7 +1096,7 @@ async def event_stream(
                                 {
                                     "event_name": "Answer",
                                     "event_data": final_answer_text,
-                                    "timestamp": datetime.utcnow().isoformat(),
+                                    "timestamp": datetime.now(UTC).isoformat(),
                                     "sequence": event_sequence,
                                 }
                             )
@@ -1206,7 +1199,7 @@ async def event_stream(
                                 {
                                     "event_name": name,
                                     "event_data": event,
-                                    "timestamp": datetime.utcnow().isoformat(),
+                                    "timestamp": datetime.now(UTC).isoformat(),
                                     "sequence": event_sequence,
                                 }
                             )
@@ -1247,7 +1240,7 @@ _cors_origins = (
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_credentials=True,
+    allow_credentials=_cors_origins != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -1901,7 +1894,7 @@ async def create_conversation(
         conversation = {
             "id": str(uuid.uuid4()),
             "title": data.get("title", "New Conversation"),
-            "timestamp": data.get("timestamp", int(datetime.datetime.now().timestamp() * 1000)),
+            "timestamp": data.get("timestamp", int(datetime.now().timestamp() * 1000)),
             "preview": data.get("preview", ""),
         }
         logger.info(f"Created conversation: {conversation['id']}")

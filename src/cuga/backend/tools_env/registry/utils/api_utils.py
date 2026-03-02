@@ -100,7 +100,7 @@ async def get_apis(app_name: str, agent_id: Optional[str] = None):
             return all_tools
         else:
             logger.error("Error while calling registry to get apps")
-            raise e
+            raise
 
 
 async def get_apps(agent_id: Optional[str] = None) -> List[AppDefinition]:
@@ -155,7 +155,7 @@ async def get_apps(agent_id: Optional[str] = None) -> List[AppDefinition]:
             return external_apps
         else:
             logger.error("Error while calling registry to get apps")
-            raise e
+            raise
 
 
 async def count_total_tools() -> int:

@@ -101,7 +101,7 @@ async def _post_extract(page: playwright.async_api.Page):
             if any(msg in str(e) for msg in ("Frame was detached", "Frame has been detached")):
                 pass
             else:
-                raise e
+                raise
 
 
 def extract_data_items_from_aria(string: str, log_level: int = logging.NOTSET):

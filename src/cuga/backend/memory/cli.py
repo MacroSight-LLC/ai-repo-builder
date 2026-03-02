@@ -44,7 +44,7 @@ def create(
             err_console.print(f"[bold red]Namespace `{namespace_id}` already exists.[/bold red]")
             raise typer.Exit(1)
         else:
-            raise e
+            raise
     if not quiet:
         console = Console()
         console.print(f"Created namespace `{namespace.id}`")

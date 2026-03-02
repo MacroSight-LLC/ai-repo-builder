@@ -495,7 +495,7 @@ async def full_extract_chrome_extension(
                 await asyncio.sleep(0.5)
                 continue
             else:
-                raise e
+                raise
 
         finally:
             # Always cleanup

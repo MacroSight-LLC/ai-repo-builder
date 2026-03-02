@@ -498,7 +498,7 @@ def run_tests(project_dir: Path) -> dict[str, object]:
         result["framework"] = "pytest"
         try:
             proc = subprocess.run(
-                ["python", "-m", "pytest", "tests/", "-v", "--tb=short", "-q"],
+                ["python", "-m", "pytest", "tests/", "-v", "--tb=short"],
                 cwd=str(project_dir),
                 capture_output=True,
                 text=True,
@@ -509,11 +509,9 @@ def run_tests(project_dir: Path) -> dict[str, object]:
             result["test_output"] = output[-3000:] if len(output) > 3000 else output
 
             # Parse pass/fail counts from pytest output
-            import re as _re
-
-            match = _re.search(r"(\d+) passed", output)
+            match = re.search(r"(\d+) passed", output)
             result["tests_passed"] = int(match.group(1)) if match else 0
-            match = _re.search(r"(\d+) failed", output)
+            match = re.search(r"(\d+) failed", output)
             result["tests_failed"] = int(match.group(1)) if match else 0
         except FileNotFoundError:
             result["test_ok"] = False

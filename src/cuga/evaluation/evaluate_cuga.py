@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from cuga.backend.activity_tracker.tracker import ActivityTracker
 from cuga.backend.cuga_graph.utils.controller import AgentRunner, ExperimentResult
 from cuga.evaluation.langfuse.get_langfuse_data import LangfuseTraceHandler
@@ -8,7 +10,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Iterable, Any, Optional
 import json
 import csv
-from calculate_test_score import evaluate_test_and_details, TestScore, TestScoreDetails, ToolCall
+from cuga.evaluation.calculate_test_score import evaluate_test_and_details, TestScore, TestScoreDetails, ToolCall
 from statistics import mean
 from pathlib import Path
 import os
@@ -133,13 +135,13 @@ def parse_test_cases(json_file_path: str) -> dict[Any, list[Any]]:
     return test_cases
 
 
-async def run_cuga(test_file_path: str, result_file_path: str) -> (List[TestCase], List[ExperimentResult]):
+async def run_cuga(test_file_path: str, result_file_path: str) -> tuple[list[TestCase], list[ExperimentResult]]:
     test_cases = parse_test_cases(test_file_path)
     print(f"test cases: {len(test_cases)}\napps: {list(test_cases.keys())}")
     agent_runner = AgentRunner(browser_enabled=False)
     results = []
     for app in test_cases:
-        task_ids = [f"{app}_{str(i)}" for i in enumerate(test_cases[app])]
+        task_ids = [f"{app}_{idx}" for idx, _ in enumerate(test_cases[app])]
         tracker.start_experiment(task_ids=task_ids, experiment_name=app, description="")
         for i, task in enumerate(test_cases[app]):
             try:

@@ -68,6 +68,8 @@ Tool Approval Example (with HITL):
     ```
 """
 
+from __future__ import annotations
+
 from typing import List, Optional, Dict, Any, Union, TYPE_CHECKING
 import uuid
 from loguru import logger
@@ -193,7 +195,7 @@ class PoliciesManager:
                 self._agent._reset_policy_storage = False
             except Exception as e:
                 logger.error(f"Failed to reset policy storage: {e}")
-                raise e
+                raise
 
         # Auto-load policies from .cuga folder if enabled
         # BUT skip auto-load if we just reset the storage (to keep it clean)
@@ -239,7 +241,7 @@ class PoliciesManager:
                     logger.warning("  Skipping auto-load")
             except Exception as e:
                 logger.error(f"Failed to auto-load policies from {self._agent.cuga_folder}: {e}")
-                raise e
+                raise
 
         return self._agent._policy_system
 
@@ -1049,16 +1051,15 @@ class PoliciesManager:
                     errors.append(error_msg)
                     logger.error(error_msg)
 
-            # 2. Save to filesystem if only in storage
-            policies_to_save_to_fs = storage_policy_ids - fs_policy_ids
-            for policy_id in policies_to_save_to_fs:
+            # 2. Add to storage if only on filesystem
+            policies_to_add = fs_policy_ids - storage_policy_ids
+            for policy_id in policies_to_add:
                 try:
-                    # Find the policy object
-                    policy = next((p for p in storage_policies if p.id == policy_id), None)
+                    policy = self._fs_sync.load_policy_from_file(policy_id)
                     if policy:
-                        self._fs_sync.save_policy_to_file(policy)
-                        added_to_filesystem_count += 1
-                        logger.info(f"Saved policy '{policy_id}' to filesystem (was only in storage)")
+                        await storage.save_policy(policy)
+                        added_to_storage_count += 1
+                        logger.info(f"Added policy '{policy_id}' to storage (was only on filesystem)")
                 except Exception as e:
                     error_msg = f"Failed to save policy '{policy_id}' to filesystem: {e}"
                     errors.append(error_msg)

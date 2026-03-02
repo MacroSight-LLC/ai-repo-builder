@@ -202,7 +202,7 @@ class SQLiteManager:
             for k, v in {"user_id": user_id, "agent_id": agent_id, "app_id": app_id}.items()
             if v is not None
         }
-        sql = ' AND '.join([f"{k} = ?" for k, v in query.keys()])
+        sql = ' AND '.join([f"{k} = ?" for k in query])
         params = list(query.values()) + [limit]
         with self._lock:
             cursor: sqlite3.Cursor = self.connection.cursor()

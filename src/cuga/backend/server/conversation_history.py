@@ -6,8 +6,10 @@ Each conversation is stored with multiple keys: agent_id, thread_id, version, an
 Uses the storage layer (get_storage().get_relational_store("conversation")) for local SQLite or prod Postgres.
 """
 
+from __future__ import annotations
+
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
@@ -120,7 +122,7 @@ class ConversationHistoryDB:
             tenant_id = _tenant_id()
             inst_id = _instance_id()
             try:
-                now = datetime.utcnow().isoformat()
+                now = datetime.now(UTC).isoformat()
                 messages_json = json.dumps(messages)
                 existing = await store.fetchone(
                     """
@@ -403,7 +405,7 @@ class ConversationHistoryDB:
             tenant_id = _tenant_id()
             inst_id = _instance_id()
             try:
-                now = datetime.utcnow().isoformat()
+                now = datetime.now(UTC).isoformat()
                 events_json = json.dumps(events)
                 existing = await store.fetchone(
                     "SELECT created_at FROM stream_events WHERE tenant_id = ? AND instance_id = ? AND agent_id = ? AND thread_id = ? AND user_id = ?",
@@ -479,7 +481,7 @@ class ConversationHistoryDB:
             new_event = {
                 "event_name": event_name,
                 "event_data": event_data,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "sequence": sequence,
             }
             events_list: List[Dict[str, Any]]

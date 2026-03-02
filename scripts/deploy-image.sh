@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 echo "--------------------------------------------------------------"
 echo 'Commencing image push to registry!'
@@ -28,5 +29,5 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Pushing image to registry"
-docker push $TARGET_IBM_REGISTRY_URL/$CR_NAMESPACE/$IMAGE_NAME:$IMAGE_TAG
+docker push "$TARGET_IBM_REGISTRY_URL/$CR_NAMESPACE/$IMAGE_NAME:$IMAGE_TAG"
 echo "Done pushing image to registry"

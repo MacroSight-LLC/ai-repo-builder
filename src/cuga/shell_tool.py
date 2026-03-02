@@ -104,6 +104,12 @@ BLOCKED_PATTERNS = [
 # false positives like "docker exec" or "npm run evaluate".
 _BLOCKED_FIRST_WORD = {"eval", "exec"}
 
+# Docker subcommands considered safe (no host filesystem access)
+_DOCKER_SAFE_SUBCMDS = {"build", "compose", "images", "ps", "logs", "inspect", "tag", "pull", "push"}
+
+# find flags that allow arbitrary execution or destructive mutations
+_FIND_DANGEROUS_FLAGS = {"-exec", "-execdir", "-delete", "-ok", "-okdir"}
+
 
 def _validate_command(command: str) -> str | None:
     """Return an error message if the command is unsafe, else None."""
@@ -131,6 +137,22 @@ def _validate_command(command: str) -> str | None:
             f"Command '{base_cmd}' is not in the allowed list. "
             f"Allowed: {', '.join(sorted(ALLOWED_COMMANDS))}"
         )
+
+    # Docker: only allow safe subcommands (block `docker run -v /:/host ...`)
+    if base_cmd in ("docker", "docker-compose") and len(parts) > 1:
+        sub = parts[1]
+        if base_cmd == "docker" and sub not in _DOCKER_SAFE_SUBCMDS:
+            return (
+                f"Blocked: 'docker {sub}' is not allowed. "
+                f"Safe docker subcommands: {', '.join(sorted(_DOCKER_SAFE_SUBCMDS))}"
+            )
+
+    # find: block -exec, -execdir, -delete
+    if base_cmd == "find":
+        for flag in parts[1:]:
+            if flag in _FIND_DANGEROUS_FLAGS:
+                return f"Blocked: 'find' with '{flag}' is not allowed"
+
     return None
 
 

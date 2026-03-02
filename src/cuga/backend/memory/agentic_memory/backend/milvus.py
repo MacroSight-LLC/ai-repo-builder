@@ -28,8 +28,20 @@ logger = Logging.get_logger()
 
 
 class MilvusMemoryBackend(BaseMemoryBackend):
-    milvus = get_milvus_client()
-    embedding_model = get_embedding_model('sentence-transformers/all-MiniLM-L6-v2')
+    _milvus = None
+    _embedding_model = None
+
+    @property
+    def milvus(self):
+        if self._milvus is None:
+            self._milvus = get_milvus_client()
+        return self._milvus
+
+    @property
+    def embedding_model(self):
+        if self._embedding_model is None:
+            self._embedding_model = get_embedding_model('sentence-transformers/all-MiniLM-L6-v2')
+        return self._embedding_model
 
     def ready(self):
         _ = self.milvus.list_collections()

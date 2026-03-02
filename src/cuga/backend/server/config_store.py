@@ -14,7 +14,7 @@ Database Schema:
 
 import json
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from cuga.backend.storage import get_storage
@@ -196,7 +196,7 @@ async def save_draft(config: dict[str, Any], agent_id: str = "cuga-default") -> 
     inst_id = _instance_id()
     try:
         await _ensure_schema(store)
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(UTC).isoformat()
         await store.execute(
             """
             INSERT INTO agent_configs (tenant_id, instance_id, agent_id, version, config_json, updated_at)

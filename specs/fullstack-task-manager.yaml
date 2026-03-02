@@ -358,7 +358,11 @@ components:
     type: widget
     props:
       - { name: task, type: Task, required: true }
-      - { name: onStatusChange, type: "(id: string, status: TaskStatus) => void", required: true }
+      - {
+          name: onStatusChange,
+          type: "(id: string, status: TaskStatus) => void",
+          required: true,
+        }
       - { name: onDelete, type: "(id: string) => void", required: true }
     state: []
     children: [PriorityBadge, CategoryTag, StatusDropdown]
@@ -376,7 +380,11 @@ components:
     type: widget
     props:
       - { name: filters, type: TaskFilters, required: true }
-      - { name: onChange, type: "(filters: TaskFilters) => void", required: true }
+      - {
+          name: onChange,
+          type: "(filters: TaskFilters) => void",
+          required: true,
+        }
     state: []
     children: [SearchInput, StatusSelect, PrioritySelect, CategorySelect]
 
@@ -460,11 +468,19 @@ data_model:
     - name: User
       fields:
         - { name: id, type: UUID, constraints: "primary key, default uuid4" }
-        - { name: email, type: String(255), constraints: "unique, not null, indexed" }
+        - {
+            name: email,
+            type: String(255),
+            constraints: "unique, not null, indexed",
+          }
         - { name: hashed_password, type: String(255), constraints: "not null" }
         - { name: full_name, type: String(100), constraints: "not null" }
         - { name: created_at, type: DateTime, constraints: "default utcnow" }
-        - { name: updated_at, type: DateTime, constraints: "default utcnow, onupdate utcnow" }
+        - {
+            name: updated_at,
+            type: DateTime,
+            constraints: "default utcnow, onupdate utcnow",
+          }
       relationships:
         - { type: one-to-many, target: Task, foreign_key: "Task.owner_id" }
 
@@ -473,13 +489,29 @@ data_model:
         - { name: id, type: UUID, constraints: "primary key, default uuid4" }
         - { name: title, type: String(200), constraints: "not null" }
         - { name: description, type: Text, constraints: nullable }
-        - { name: status, type: "Enum(todo, in_progress, done)", constraints: "default todo" }
-        - { name: priority, type: "Enum(low, medium, high)", constraints: "default medium" }
+        - {
+            name: status,
+            type: "Enum(todo, in_progress, done)",
+            constraints: "default todo",
+          }
+        - {
+            name: priority,
+            type: "Enum(low, medium, high)",
+            constraints: "default medium",
+          }
         - { name: due_date, type: DateTime, constraints: nullable }
         - { name: owner_id, type: UUID, constraints: "FK -> User.id, not null" }
-        - { name: category_id, type: UUID, constraints: "FK -> Category.id, nullable" }
+        - {
+            name: category_id,
+            type: UUID,
+            constraints: "FK -> Category.id, nullable",
+          }
         - { name: created_at, type: DateTime, constraints: "default utcnow" }
-        - { name: updated_at, type: DateTime, constraints: "default utcnow, onupdate utcnow" }
+        - {
+            name: updated_at,
+            type: DateTime,
+            constraints: "default utcnow, onupdate utcnow",
+          }
       relationships:
         - { type: many-to-one, target: User, foreign_key: owner_id }
         - { type: many-to-one, target: Category, foreign_key: category_id }

@@ -86,7 +86,7 @@ export function App() {
       window.history.replaceState({}, '', url.toString());
     }
   }, [hasStartedChat]);
-  
+
   const { isTourActive, hasSeenTour, startTour, completeTour, skipTour, resetTour } = useTour();
 
   // Handle variables updates from CustomChat
@@ -231,7 +231,7 @@ export function App() {
           onFileHover={setHighlightedFile}
           disabled={false}
         />
-        
+
         {/* Tour help button - welcome screen - DISABLED */}
         {/* {!hasStartedChat && hasSeenTour && (
           <button
@@ -242,10 +242,10 @@ export function App() {
             <HelpCircle size={20} />
           </button>
         )} */}
-        
+
         {/* Advanced tour button - after chat started */}
         {hasStartedChat && <AdvancedTourButton />}
-        
+
         {/* Guided Tour - only show when chat has started (disabled on welcome screen) */}
         {hasStartedChat && isTourActive && (
           <GuidedTour

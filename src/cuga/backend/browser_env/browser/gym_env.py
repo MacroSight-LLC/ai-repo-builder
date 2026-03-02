@@ -555,7 +555,7 @@ document.addEventListener("visibilitychange", () => {
                     time.sleep(0.5)
                     continue
                 else:
-                    raise e
+                    raise
             break
 
         # post-extraction cleanup of temporary info in dom

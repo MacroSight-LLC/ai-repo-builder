@@ -904,7 +904,7 @@ def create_cuga_lite_graph(
                         "_FakeResponse", (), {"content": f"```python\n{code}\n```", "additional_kwargs": {}}
                     )()
                 else:
-                    raise e
+                    raise
 
             content = response.content
             reasoning_content = response.additional_kwargs.get('reasoning_content')

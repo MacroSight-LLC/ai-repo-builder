@@ -198,7 +198,7 @@ async def list_application_apis(
             return await reg.show_apis_for_app(app_name, include_response_schema)
         return await registry.show_apis_for_app(app_name, include_response_schema)
     except HTTPException as e:
-        raise e
+        raise
     except Exception as e:
         logger.error(f"Error in list_application_apis for '{app_name}': {type(e).__name__}: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {type(e).__name__}: {str(e)}")
@@ -378,7 +378,7 @@ async def call_mcp_function(
         logger.error(f"HTTPException in call_mcp_function: {e}")
         logger.error(f"  Status Code: {e.status_code}")
         logger.error(f"  Detail: {e.detail}")
-        raise e
+        raise
     except Exception as e:
         # Catch any other unexpected errors during the process
         import traceback

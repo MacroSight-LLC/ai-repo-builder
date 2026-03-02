@@ -375,7 +375,7 @@ def spec_to_prompt(
         if docker:
             parts.append("\n## Docker Configuration")
             parts.append(f"- Multi-stage build: {docker.get('multi_stage', True)}")
-            parts.append(f"- Base image: {docker.get('base_image', 'python:3.11-slim')}")
+            parts.append(f"- Base image: {docker.get('base_image', 'python:3.12-slim')}")
             services = docker.get("compose_services", [])
             if services:
                 parts.append("- Compose services:")

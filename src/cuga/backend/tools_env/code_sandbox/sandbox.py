@@ -32,7 +32,9 @@ try:
     logger.info("Successfully imported SandboxSession from llm_sandbox")
 except ImportError as e:
     if settings.features.local_sandbox:
-        logger.info("Skipping import of SandboxSession from llm_sandbox because local_sandbox is enabled")
+        logger.info(
+            "Skipping import of SandboxSession from llm_sandbox because local_sandbox is enabled"
+        )
         pass
     else:
         logger.error(f"Failed to import SandboxSession from llm_sandbox: {e}")
@@ -50,7 +52,7 @@ structured_tools_init = "# Initialize tracker\ntracker = ActivityTracker()"
 structured_tools_invocation = """
     try:
         result = await tracker.invoke_tool(app_name, api_name, args)
-        
+
         if not isinstance(result, dict):
             if hasattr(result, 'model_dump'):
                 return result.model_dump()
@@ -66,9 +68,9 @@ structured_tools_invocation = """
         if "not found" in str(e):
             pass
         else:
-            raise e
+            raise
     except Exception as e:
-        raise e
+        raise
 """
 
 
@@ -82,27 +84,25 @@ def get_premable(is_local=False, current_date=None, for_e2b=False):
     # E2B runs in remote cloud and needs a publicly accessible URL
     if for_e2b:
         # Try function_call_host first (preferred for E2B), then registry_host
-        function_call_url = getattr(settings.server_ports, 'function_call_host', None)
+        function_call_url = getattr(settings.server_ports, "function_call_host", None)
         if not function_call_url:
-            function_call_url = getattr(settings.server_ports, 'registry_host', None)
+            function_call_url = getattr(settings.server_ports, "registry_host", None)
         if not function_call_url:
             # E2B cannot reach localhost - warn user
-            registry_port = getattr(
-                getattr(settings, "server_ports", None), "registry", 8010
-            )
+            registry_port = getattr(getattr(settings, "server_ports", None), "registry", 8010)
             logger.error(
                 "E2B sandbox requires a publicly accessible URL. "
                 "Please set 'function_call_host' or 'registry_host' in settings.toml. "
                 f"You can use ngrok or expose your registry server (port {registry_port}) to the internet."
             )
-            function_call_url = f"http://localhost:{registry_port}"  # Will fail but at least show the issue
+            function_call_url = (
+                f"http://localhost:{registry_port}"  # Will fail but at least show the issue
+            )
         registry_host = f"{function_call_url}/functions/call?trajectory_path={quote(tracker.get_current_trajectory_path())}"
     # Check if registry_host was explicitly configured (non-E2B)
-    elif hasattr(settings.server_ports, 'registry_host') and settings.server_ports.registry_host:
+    elif hasattr(settings.server_ports, "registry_host") and settings.server_ports.registry_host:
         # Use the configured registry_host directly
-        registry_host = (
-            f"{registry_base}/functions/call?trajectory_path={quote(tracker.get_current_trajectory_path())}"
-        )
+        registry_host = f"{registry_base}/functions/call?trajectory_path={quote(tracker.get_current_trajectory_path())}"
     else:
         # Fallback to default behavior (Docker vs local)
         # In Docker, use host.docker.internal to access host services
@@ -111,9 +111,7 @@ def get_premable(is_local=False, current_date=None, for_e2b=False):
             if is_local
             else f"http://host.docker.internal:{settings.server_ports.registry!s}"  # Docker host
         )
-        registry_host = (
-            f"{base_url}/functions/call?trajectory_path={quote(tracker.get_current_trajectory_path())}"
-        )
+        registry_host = f"{base_url}/functions/call?trajectory_path={quote(tracker.get_current_trajectory_path())}"
 
     # Check if structured tools should be enabled
     if settings.features.local_sandbox and tracker.tools is not None and len(tracker.tools) > 0:
@@ -182,7 +180,7 @@ async def call_api(app_name, api_name, args=None):
     req = urllib.request.Request(url, data=data, headers=headers, method='POST')
 
     loop = asyncio.get_event_loop()
-    
+
     def _sync_call():
         try:
             with urllib.request.urlopen(req, timeout=30) as response:
@@ -198,7 +196,7 @@ async def call_api(app_name, api_name, args=None):
         except urllib.error.URLError as e:
             print(e)
             raise Exception(f"URL Error: {e.reason}")
-    
+
     return await loop.run_in_executor(None, _sync_call)
         """
     )
@@ -223,15 +221,15 @@ async def run_local(code_content: str) -> ExecutionResult:
 
     # Create a namespace that allows dynamic imports
     namespace = {
-        '__builtins__': __builtins__,
-        '__name__': '__main__',
-        '__file__': '<string>',
-        '__doc__': None,
-        '__package__': None,
-        '__import__': __import__,
-        'importlib': importlib,
-        'asyncio': asyncio,
-        'concurrent': concurrent,
+        "__builtins__": __builtins__,
+        "__name__": "__main__",
+        "__file__": "<string>",
+        "__doc__": None,
+        "__package__": None,
+        "__import__": __import__,
+        "importlib": importlib,
+        "asyncio": asyncio,
+        "concurrent": concurrent,
     }
 
     # Add all currently loaded modules to the namespace
@@ -242,7 +240,7 @@ async def run_local(code_content: str) -> ExecutionResult:
         with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
             # Use compile to get better error reporting and validate syntax
             try:
-                compiled_code = compile(code_content, '<string>', 'exec')
+                compiled_code = compile(code_content, "<string>", "exec")
             except SyntaxError as se:
                 # Provide detailed syntax error information
                 error_msg = "Syntax Error in generated code:\n"
@@ -254,10 +252,10 @@ async def run_local(code_content: str) -> ExecutionResult:
             exec(compiled_code, namespace, namespace)
 
             # Now get the wrapper function from namespace and await it
-            if '__cuga_async_wrapper__' in namespace and asyncio.iscoroutinefunction(
-                namespace['__cuga_async_wrapper__']
+            if "__cuga_async_wrapper__" in namespace and asyncio.iscoroutinefunction(
+                namespace["__cuga_async_wrapper__"]
             ):
-                await namespace['__cuga_async_wrapper__']()
+                await namespace["__cuga_async_wrapper__"]()
     except SystemExit as e:
         exit_code = e.code if e.code is not None else 0
         logger.warning("=" * 80)
@@ -280,7 +278,7 @@ async def run_local(code_content: str) -> ExecutionResult:
         logger.error("=" * 80)
 
         # Write detailed error with traceback to stderr
-        stderr_buffer.write(f"Error during execution: {type(e).__name__}(\"{e!s}\")\n")
+        stderr_buffer.write(f'Error during execution: {type(e).__name__}("{e!s}")\n')
         stderr_buffer.write("Traceback (most recent call last):\n")
         stderr_buffer.write(error_details)
     except Exception as e:
@@ -300,7 +298,7 @@ async def run_local(code_content: str) -> ExecutionResult:
         logger.error("=" * 80)
 
         # Write detailed error with traceback to stderr
-        stderr_buffer.write(f"Error during execution: {type(e).__name__}(\"{e!s}\")\n")
+        stderr_buffer.write(f'Error during execution: {type(e).__name__}("{e!s}")\n')
         stderr_buffer.write("Traceback (most recent call last):\n")
         stderr_buffer.write(error_details)
 
@@ -319,7 +317,7 @@ def validate_and_clean_code(code: str) -> tuple[str, str | None]:
     """
     # Try to compile the code to check for syntax errors
     try:
-        compile(code, '<validation>', 'exec')
+        compile(code, "<validation>", "exec")
     except SyntaxError as e:
         error_msg = "Syntax Error in generated code before execution:\n"
         error_msg += f"  Line {e.lineno}: {e.text.strip() if e.text else 'N/A'}\n"
@@ -347,11 +345,13 @@ async def run_code(
     file_path = python_file_dir + "/" + f"{mask_with_timestamp(tracker.task_id)}.py"
 
     wrapped_code = f"""async def __cuga_async_wrapper__():
-{chr(10).join('    ' + line for line in code.split(chr(10)))}
+{chr(10).join("    " + line for line in code.split(chr(10)))}
 """
 
     # Docker/Podman: Use asyncio.run() to execute from sync context
-    wrapped_code_with_call = wrapped_code + "\nimport asyncio\nasyncio.run(__cuga_async_wrapper__())\n"
+    wrapped_code_with_call = (
+        wrapped_code + "\nimport asyncio\nasyncio.run(__cuga_async_wrapper__())\n"
+    )
 
     # E2B: Use async main pattern for E2B's async environment
     wrapped_code_e2b = (
@@ -421,7 +421,7 @@ if __name__ == "__main__":
 
     if settings.advanced_features.tracker_enabled:
         os.makedirs(python_file_dir, exist_ok=True)
-        with open(file_path, 'w') as f:
+        with open(file_path, "w") as f:
             f.write(code_content_for_saving)
             logger.debug(f"Wrote python file at {file_path}")
 

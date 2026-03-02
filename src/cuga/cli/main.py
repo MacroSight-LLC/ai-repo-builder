@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import os
 import platform
 import signal
@@ -6,7 +8,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import httpx
 import psutil
@@ -199,7 +201,7 @@ def wait_for_server(
 
     for attempt in range(max_retries):
         try:
-            with httpx.Client(timeout=1.0, verify=False) as client:
+            with httpx.Client(timeout=1.0, verify=https) as client:
                 response = client.get(url)
                 if response.status_code == 200:
                     logger.info(f"{server_name} is ready!")
@@ -401,6 +403,18 @@ def stop_direct_processes():
 
     direct_processes.clear()
 
+    # Close any open log file handles
+    for handle in direct_log_handles.values():
+        try:
+            handle.close()
+        except Exception:
+            pass
+    direct_log_handles.clear()
+
+
+# Track open log file handles alongside processes
+direct_log_handles: dict[str, Any] = {}
+
 
 def run_direct_service(
     service_name: str,
@@ -444,14 +458,18 @@ def run_direct_service(
             log_path = os.path.abspath(log_file)
             log_dir = os.path.dirname(log_path)
             os.makedirs(log_dir, exist_ok=True)
-            log_handle = open(log_path, 'a', encoding='utf-8')
+            log_handle = open(log_path, 'a', encoding='utf-8')  # noqa: SIM115
             kwargs['stdout'] = log_handle
             kwargs['stderr'] = subprocess.STDOUT
             logger.info(f"Redirecting {service_name} output to {log_path}")
+        else:
+            log_handle = None
 
         process = subprocess.Popen(command, **kwargs)
 
         direct_processes[service_name] = process
+        if log_handle is not None:
+            direct_log_handles[service_name] = log_handle
         return process
 
     except Exception as e:

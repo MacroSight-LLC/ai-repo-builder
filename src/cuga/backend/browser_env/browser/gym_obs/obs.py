@@ -91,7 +91,7 @@ def _post_extract(page: playwright.sync_api.Page):
             if "Frame was detached" in str(e):
                 pass
             else:
-                raise e
+                raise
 
 
 class GymObs:
@@ -128,7 +128,7 @@ class GymObs:
                     time.sleep(0.5)
                     continue
                 else:
-                    raise e
+                    raise
             break
 
             # post-extraction cleanup of temporary info in dom

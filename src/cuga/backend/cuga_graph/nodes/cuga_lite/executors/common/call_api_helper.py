@@ -13,17 +13,15 @@ class CallApiHelper:
     @staticmethod
     def get_function_call_url() -> str:
         """Get the function call URL for remote execution (E2B, Docker, etc)."""
-        function_call_url = getattr(settings.server_ports, 'function_call_host', None)
+        function_call_url = getattr(settings.server_ports, "function_call_host", None)
         if not function_call_url:
-            function_call_url = getattr(settings.server_ports, 'registry_host', None)
+            function_call_url = getattr(settings.server_ports, "registry_host", None)
         if not function_call_url:
             logger.warning(
                 "No function_call_host or registry_host configured. "
                 "Remote execution may fail. Using localhost fallback from settings."
             )
-            registry_port = getattr(
-                getattr(settings, "server_ports", None), "registry", 8010
-            )
+            registry_port = getattr(getattr(settings, "server_ports", None), "registry", 8010)
             function_call_url = f"http://localhost:{registry_port}"
         return function_call_url
 
@@ -58,7 +56,9 @@ class CallApiHelper:
 
         tracker = ActivityTracker()
 
-        async def call_api(app_name: str, api_name: str, args: dict = None, operation_id: str = None):
+        async def call_api(
+            app_name: str, api_name: str, args: dict = None, operation_id: str = None
+        ):
             """Call API tool via tracker or registry.
 
             Args:
@@ -70,7 +70,7 @@ class CallApiHelper:
             if args is None:
                 args = {}
 
-            timeout_seconds = getattr(settings.advanced_features, 'tool_call_timeout', 30)
+            timeout_seconds = getattr(settings.advanced_features, "tool_call_timeout", 30)
             start_time = time.time()
             result = None
             error_msg = None
@@ -83,13 +83,15 @@ class CallApiHelper:
                             tracker.invoke_tool(app_name, api_name, args), timeout=timeout_seconds
                         )
                     except TimeoutError:
-                        error_msg = f"Tool call '{api_name}' timed out after {timeout_seconds} seconds"
+                        error_msg = (
+                            f"Tool call '{api_name}' timed out after {timeout_seconds} seconds"
+                        )
                         raise TimeoutError(error_msg)
 
                     if not isinstance(result, dict):
-                        if hasattr(result, 'model_dump'):
+                        if hasattr(result, "model_dump"):
                             result = result.model_dump()
-                        elif hasattr(result, '__dict__'):
+                        elif hasattr(result, "__dict__"):
                             result = result.__dict__
                         else:
                             result = str(result)
@@ -98,7 +100,7 @@ class CallApiHelper:
                 # Fallback to registry API
                 if settings.advanced_features.registry:
                     registry_base = get_registry_base_url()
-                    url = f'{registry_base}/functions/call'
+                    url = f"{registry_base}/functions/call"
 
                     payload = {"app_name": app_name, "function_name": api_name, "args": args}
 
@@ -107,7 +109,10 @@ class CallApiHelper:
                             async with session.post(
                                 url,
                                 json=payload,
-                                headers={"accept": "application/json", "Content-Type": "application/json"},
+                                headers={
+                                    "accept": "application/json",
+                                    "Content-Type": "application/json",
+                                },
                                 timeout=aiohttp.ClientTimeout(total=timeout_seconds),
                             ) as response:
                                 if response.status != 200:
@@ -122,7 +127,9 @@ class CallApiHelper:
                                     result = response_data
                                 return result
                     except TimeoutError:
-                        error_msg = f"Tool call '{api_name}' timed out after {timeout_seconds} seconds"
+                        error_msg = (
+                            f"Tool call '{api_name}' timed out after {timeout_seconds} seconds"
+                        )
                         raise TimeoutError(error_msg)
                     except Exception as e:
                         error_msg = f"Error calling API {api_name}: {e!s}"
@@ -151,7 +158,9 @@ class CallApiHelper:
         return call_api
 
     @staticmethod
-    def create_remote_call_api_code(function_call_url: str = None, trajectory_path: str = "") -> str:
+    def create_remote_call_api_code(
+        function_call_url: str = None, trajectory_path: str = ""
+    ) -> str:
         """Create call_api helper function CODE for REMOTE execution (E2B, Docker, etc).
 
         For remote execution, we ONLY use registry API via HTTP (no tracker).
@@ -171,7 +180,7 @@ class CallApiHelper:
         if trajectory_path:
             url_with_trajectory += f"?trajectory_path={trajectory_path}"
 
-        timeout_seconds = getattr(settings.advanced_features, 'tool_call_timeout', 30)
+        timeout_seconds = getattr(settings.advanced_features, "tool_call_timeout", 30)
 
         return f"""
 import asyncio
@@ -182,7 +191,7 @@ async def call_api(app_name, api_name, args=None):
     \"\"\"Call registry API tool via HTTP (remote execution only).\"\"\"
     if args is None:
         args = {{}}
-    
+
     url = "{url_with_trajectory}"
     headers = {{
         "accept": "application/json",
@@ -193,7 +202,7 @@ async def call_api(app_name, api_name, args=None):
         "app_name": app_name,
         "args": args
     }}
-    
+
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -205,7 +214,7 @@ async def call_api(app_name, api_name, args=None):
                 if response.status != 200:
                     error_text = await response.text()
                     raise Exception(f"HTTP Error: {{response.status}} - {{error_text}}")
-                
+
                 response_data = await response.text()
                 try:
                     return json.loads(response_data)

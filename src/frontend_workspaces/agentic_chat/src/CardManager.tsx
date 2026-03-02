@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { marked } from "marked";
+import { sanitizeHtml } from "./sanitize";
 
 // Simple ChatInstance interface (no Carbon dependency)
 interface ChatInstance {
@@ -1056,7 +1057,7 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                     border: "1px solid #e2e8f0",
                     fontStyle: "italic",
                   }}
-                  dangerouslySetInnerHTML={{ __html: marked(textContent) }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(marked(textContent) as string) }}
                 />
               );
             }
@@ -1200,7 +1201,7 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                         color: "#1e293b",
                         marginBottom: (playbookGuideContent || activePolicies.length > 0) ? "20px" : "0",
                       }}
-                      dangerouslySetInnerHTML={{ __html: renderedContent }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(renderedContent) }}
                     />
                     
                     {/* 2. Playbook guide content (collapsible if available) */}
@@ -1248,7 +1249,7 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                               borderTop: "1px solid #e5e7eb",
                             }}
                           >
-                            <div dangerouslySetInnerHTML={{ __html: marked(playbookGuideContent) }} />
+                            <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(marked(playbookGuideContent) as string) }} />
                           </div>
                         </details>
                       </div>
@@ -1488,7 +1489,7 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                                 borderTop: "1px solid #e5e7eb",
                               }}
                             >
-                              <div dangerouslySetInnerHTML={{ __html: marked(playbookGuideContent) }} />
+                              <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(marked(playbookGuideContent) as string) }} />
                             </div>
                           </details>
                         </div>
@@ -1993,7 +1994,7 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
             {React.isValidElement(description) ? (
               description
             ) : (
-              <span dangerouslySetInnerHTML={{ __html: description as string }} />
+              <span dangerouslySetInnerHTML={{ __html: sanitizeHtml(description as string) }} />
             )}
           </div>
         </div>

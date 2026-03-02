@@ -39,7 +39,7 @@ COPY docs/examples/huggingface/email_template.md /app/cuga_workspace/email_templ
 EXPOSE 7860
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD curl -f http://localhost:7860/health || exit 1
+    CMD curl -f http://localhost:7860/health || exit 1
 
 # Set host to 0.0.0.0 to allow external connections
 ENV CUGA_HOST=0.0.0.0

@@ -189,7 +189,7 @@ class ChatAgent(BaseAgent):
                         for fresh_tool in self.tools:
                             if fresh_tool.name == tool_name:
                                 return await fresh_tool.ainvoke(tool_args)
-                    raise e
+                    raise
 
         logger.error(f"Tool {tool_name} not found in available tools")
         return None
@@ -226,7 +226,7 @@ class ChatAgent(BaseAgent):
                             "conversation": self.map_chat_messages(chat_messages),
                         }
                     )
-                raise e
+                raise
 
     def map_chat_messages(self, chat_messages: List[BaseMessage]):
         """

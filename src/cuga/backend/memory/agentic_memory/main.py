@@ -30,7 +30,7 @@ app.openapi_version = '3.0.3'
 # Add CORS middleware to handle preflight OPTIONS requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),  # Override via CORS_ORIGINS env var
+    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:7860").split(","),  # Override via CORS_ORIGINS env var
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods including OPTIONS
     allow_headers=["*"],  # Allow all headers

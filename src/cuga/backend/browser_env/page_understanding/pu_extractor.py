@@ -81,7 +81,7 @@ class PageUnderstandingExtractor:
                     await asyncio.sleep(0.5)
                     continue
                 else:
-                    raise e
+                    raise
             break
         await _post_extract(page)
         screenshot = await extract_screenshot_base64(page)

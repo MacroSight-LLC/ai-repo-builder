@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Send, RotateCcw, Bot, User, FileText, Database, Code, Terminal, Cpu, Globe, Settings, ChevronRight } from "lucide-react";
+import { sanitizeHtml } from "./sanitize";
 import CardManager from "./CardManager";
 import { StopButton } from "./floating/stop_button";
 import { fetchStreamingData } from "./StreamingWorkflow";
@@ -1066,7 +1067,7 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
               ) : (
                 <div
                   className="message-content"
-                  dangerouslySetInnerHTML={{ __html: message.text }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(message.text) }}
                 />
               )}
             </div>
