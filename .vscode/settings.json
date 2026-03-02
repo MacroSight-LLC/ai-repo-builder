@@ -1,6 +1,6 @@
 {
-    // ── Workspace overrides (${workspaceFolder} resolves here) ──
-    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    // ── Workspace overrides ──
+    "python.defaultInterpreterPath": ".venv/bin/python",
     "python.envFile": "${workspaceFolder}/.env",
     "python.analysis.extraPaths": [
         "${workspaceFolder}/src"
@@ -14,11 +14,18 @@
             "source.fixAll": "explicit"
         }
     },
+    "[dockercompose]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[markdown]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
     "editor.codeActions.triggerOnFocusChange": false,
     "terminal.integrated.env.osx": {
         "PYTHONPATH": "${workspaceFolder}/src"
     },
     "yaml.schemas": {
         "${workspaceFolder}/schemas/spec-schema.json": "specs/*.yaml"
-    }
+    },
+    "editor.codeActionsOnSave": {}
 }
