@@ -855,10 +855,7 @@ def validate_project(project_dir: Path, spec: dict | None = None) -> dict:
             structure = spec.get("structure", {})
             if isinstance(structure, dict):
                 raw = structure.get("files") or []
-                all_spec_files = [
-                    f.get("path", "") if isinstance(f, dict) else str(f)
-                    for f in raw
-                ]
+                all_spec_files = [f.get("path", "") if isinstance(f, dict) else str(f) for f in raw]
             elif isinstance(structure, list):
                 all_spec_files = list(structure)
 

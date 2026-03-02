@@ -173,9 +173,7 @@ def spec_to_prompt(
                 parts.append(f"### `{name}/{fpath}`")
                 parts.append(f"Purpose: {purpose}")
                 if contents:
-                    parts.append(
-                        "Minimum elements (expand into full implementation):"
-                    )
+                    parts.append("Minimum elements (expand into full implementation):")
                     for c in contents:
                         parts.append(f"  - {c}")
                 parts.append("")

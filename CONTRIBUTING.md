@@ -10,6 +10,7 @@
 6. Open a Pull Request from your fork to `main` with a clear description and checklist results.
 
 Notes:
+
 - All PRs are merged using "Squash and merge". The PR title will become the final commit message — write it carefully using the Conventional Commits format.
 - Prefer one topic per PR. If your changes touch many areas, split into multiple PRs.
 
@@ -78,6 +79,7 @@ typo
 ```
 
 Why this matters:
+
 - Enables clean history and automated tooling (changelogs, versioning).
 - Because we squash-merge, the PR title becomes the final commit — use Conventional Commits in the PR title too.
 
@@ -110,6 +112,7 @@ We follow the Conventional Branch specification. See the full spec at [conventio
 4. **Include ticket numbers**: If applicable, include the ticket number from your project management tool to make tracking easier.
 
 Why this matters:
+
 - **Clear Communication**: The branch name alone provides a clear understanding of its purpose.
 - **Automation-Friendly**: Easily hooks into automation processes (e.g., different workflows for `feature`, `release`, etc.).
 - **Team Collaboration**: Encourages collaboration by making branch purpose explicit.
@@ -132,6 +135,7 @@ We provide specific PR templates to help you create well-structured pull request
 - **Chore PRs**: `?template=chore.md` - For maintenance tasks, dependency updates, and refactoring
 
 Each template includes:
+
 - Related issue linking
 - Type of changes checkboxes
 - Testing checklist
@@ -151,6 +155,7 @@ uv run ruff check --fix
 ```
 
 Must:
+
 - If your change touches the browser/env, verify relevant demos still run.
 - Update README.md or docs if only needed, discuss before
 
@@ -174,7 +179,6 @@ If everything passes, no need to mark secrets or false positives. This ensures n
 uv sync --dev
 ```
 
-
 ### Run tests
 
 Comprehensive test suite including linting, unit tests, and e2e tests:
@@ -185,10 +189,10 @@ chmod +x ./src/scripts/run_tests.sh
 ```
 
 This will run:
+
 - **Linting checks**: Ruff code quality and formatting validation
 - **Unit tests**: Variables manager, API response handling, registry functionality
 - **E2E tests**: System tests across Fast and Balanced modes for real-world scenarios
-
 
 ## IDE Setup Quick Links
 
@@ -196,7 +200,9 @@ First make sure that your IDE environment is properly configured
 [See Python Code Formatting Guide](#python-code-formatting-guide)
 
 # Python Code Formatting Guide
+
 Before every commit make sure to run:
+
 ```commandline
 ruff format
 ruff check --fix
@@ -205,9 +211,11 @@ ruff check --fix
 ### Ruff formatter and linter installation on IDE
 
 #### VS Code
+
 [https://github.com/astral-sh/ruff-vscode](https://marketplace.visualstudio.com/items?itemName=charliermarsh.ruff)
 
 #### Pycharm
+
 https://docs.astral.sh/ruff/editors/setup/#pycharm
 
 # IDE Debug Mode Setup
@@ -226,7 +234,6 @@ https://docs.astral.sh/ruff/editors/setup/#pycharm
 For local development and testing:
 
 1. **API Registry Demo** - Runs the API registry server for demo environment
-
    - Port: 8001
    - Uses: `mcp_servers.yaml`
 
@@ -238,9 +245,11 @@ For local development and testing:
 1. Start "API Registry Demo" first
 2. Then start "Cuga Demo"
 
-
 ## VSCode Instructions
 
 1. Open VS Code's Run and Debug panel
 2. Select the desired configuration from the dropdown
-3. Start debugging
+3. Click the green play button or press `F5`
+4. Monitor output in the Debug Console
+
+For more details, see the [README](README.md). 3. Start debugging

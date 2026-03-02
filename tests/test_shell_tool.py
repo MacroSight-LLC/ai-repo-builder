@@ -9,9 +9,9 @@ from unittest.mock import patch
 import pytest
 
 from cuga.shell_tool import (
+    _BLOCKED_FIRST_WORD,
     ALLOWED_COMMANDS,
     BLOCKED_PATTERNS,
-    _BLOCKED_FIRST_WORD,
     _execute_shell,
     _validate_command,
     create_shell_tool,
@@ -113,8 +113,10 @@ class TestValidateCommand:
         assert _validate_command("/usr/local/bin/git status") is None
 
     def test_command_with_pipes(self) -> None:
-        """Pipe to an allowed command is ok (first token is checked)."""
-        assert _validate_command("grep -r 'def' . | head -20") is None
+        """Pipe operator is blocked since we use subprocess_exec (no shell)."""
+        result = _validate_command("grep -r 'def' . | head -20")
+        assert result is not None
+        assert "shell operator" in result
 
     def test_command_with_redirect(self) -> None:
         """Output redirect is allowed when not to /dev/."""

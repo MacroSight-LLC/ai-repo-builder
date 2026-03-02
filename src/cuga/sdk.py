@@ -70,19 +70,25 @@ Tool Approval Example (with HITL):
 
 from __future__ import annotations
 
-from typing import List, Optional, Dict, Any, Union, TYPE_CHECKING
 import uuid
+from typing import TYPE_CHECKING, Any
+
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.language_models import BaseChatModel
+from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import BaseTool
 from loguru import logger
 from pydantic import BaseModel, Field
-from langchain_core.tools import BaseTool
-from langchain_core.language_models import BaseChatModel
-from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.runnables import RunnableConfig
 
 if TYPE_CHECKING:
     pass
 
-from cuga.backend.llm.models import LLMManager
+import builtins
+
+from langchain_core.messages import BaseMessage, HumanMessage
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph
+
 from cuga.backend.cuga_graph.nodes.cuga_lite.cuga_lite_graph import (
     create_cuga_lite_graph,
 )
@@ -91,33 +97,31 @@ from cuga.backend.cuga_graph.nodes.cuga_lite.direct_langchain_tools_provider imp
 )
 from cuga.backend.cuga_graph.nodes.cuga_lite.tool_provider_interface import ToolProviderInterface
 from cuga.backend.cuga_graph.policy.configurable import PolicyConfigurable
-from cuga.backend.cuga_graph.state.agent_state import AgentState
-from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import MemorySaver
 from cuga.backend.cuga_graph.policy.models import (
+    AlwaysTrigger,
     IntentGuard,
-    Playbook,
-    ToolGuide,
-    ToolApproval,
-    OutputFormatter,
+    IntentGuardResponse,
     KeywordTrigger,
     NaturalLanguageTrigger,
-    IntentGuardResponse,
-    AlwaysTrigger,
+    OutputFormatter,
+    Playbook,
+    ToolApproval,
+    ToolGuide,
 )
-from langchain_core.messages import HumanMessage, BaseMessage
+from cuga.backend.cuga_graph.state.agent_state import AgentState
+from cuga.backend.llm.models import LLMManager
 
 
 class InvokeResult(BaseModel):
     """Result from CugaAgent.invoke() containing answer and metadata."""
 
     answer: str = Field(default="", description="The agent's final answer")
-    tool_calls: List[Dict[str, Any]] = Field(
+    tool_calls: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List of tool calls made during execution (when track_tool_calls is enabled)",
     )
     thread_id: str = Field(default="", description="Thread ID used for this invocation")
-    error: Optional[str] = Field(default=None, description="Error message if execution failed")
+    error: str | None = Field(default=None, description="Error message if execution failed")
 
     def __str__(self) -> str:
         """Return the answer when converting to string for backward compatibility."""
@@ -153,12 +157,12 @@ class PoliciesManager:
         ```
     """
 
-    def __init__(self, agent: "CugaAgent"):
+    def __init__(self, agent: CugaAgent):
         """Initialize policies manager with reference to agent."""
         self._agent = agent
         self._fs_sync = None
 
-    async def _ensure_policy_system(self) -> Optional[PolicyConfigurable]:
+    async def _ensure_policy_system(self) -> PolicyConfigurable | None:
         """Ensure policy system is initialized if enabled.
 
         Returns:
@@ -169,7 +173,7 @@ class PoliciesManager:
         if not settings.policy.enabled:
             return None
 
-        if not hasattr(self._agent, '_policy_system') or self._agent._policy_system is None:
+        if not hasattr(self._agent, "_policy_system") or self._agent._policy_system is None:
             self._agent._policy_system = PolicyConfigurable()
             await self._agent._policy_system.initialize()
 
@@ -223,9 +227,9 @@ class PoliciesManager:
                             self._agent._policy_system.storage, folder_path
                         )
                         if (
-                            sync_result['removed']
-                            or sync_result['added_to_storage']
-                            or sync_result['added_to_filesystem']
+                            sync_result["removed"]
+                            or sync_result["added_to_storage"]
+                            or sync_result["added_to_filesystem"]
                         ):
                             logger.info(
                                 f"Sync validation complete: "
@@ -249,14 +253,14 @@ class PoliciesManager:
         self,
         name: str,
         description: str = "",
-        keywords: Optional[List[str]] = None,
-        intent_examples: Optional[List[str]] = None,
+        keywords: builtins.list[str] | None = None,
+        intent_examples: builtins.list[str] | None = None,
         response: str = "This action is not allowed.",
         response_type: str = "natural_language",
         priority: int = 50,
         enabled: bool = True,
         allow_override: bool = False,
-        policy_id: Optional[str] = None,
+        policy_id: str | None = None,
     ) -> str:
         """
         Add an Intent Guard policy (blocker).
@@ -346,12 +350,12 @@ class PoliciesManager:
         name: str,
         content: str,
         description: str = "",
-        keywords: Optional[List[str]] = None,
-        natural_language_trigger: Optional[List[str]] = None,
+        keywords: builtins.list[str] | None = None,
+        natural_language_trigger: builtins.list[str] | None = None,
         threshold: float = 0.7,
         priority: int = 50,
         enabled: bool = True,
-        policy_id: Optional[str] = None,
+        policy_id: str | None = None,
     ) -> str:
         """
         Add a Playbook policy (guidance).
@@ -441,14 +445,14 @@ class PoliciesManager:
         self,
         name: str,
         content: str,
-        target_tools: List[str],
+        target_tools: builtins.list[str],
         description: str = "",
-        keywords: Optional[List[str]] = None,
-        target_apps: Optional[List[str]] = None,
+        keywords: builtins.list[str] | None = None,
+        target_apps: builtins.list[str] | None = None,
         prepend: bool = False,
         priority: int = 50,
         enabled: bool = True,
-        policy_id: Optional[str] = None,
+        policy_id: str | None = None,
     ) -> str:
         """
         Add a Tool Guide policy.
@@ -526,15 +530,15 @@ class PoliciesManager:
     async def add_tool_approval(
         self,
         name: str,
-        required_tools: List[str],
+        required_tools: builtins.list[str],
         description: str = "",
-        required_apps: Optional[List[str]] = None,
-        approval_message: Optional[str] = None,
+        required_apps: builtins.list[str] | None = None,
+        approval_message: str | None = None,
         show_code_preview: bool = True,
-        auto_approve_after: Optional[int] = None,
+        auto_approve_after: int | None = None,
         priority: int = 50,
         enabled: bool = True,
-        policy_id: Optional[str] = None,
+        policy_id: str | None = None,
     ) -> str:
         """
         Add a Tool Approval policy.
@@ -601,12 +605,12 @@ class PoliciesManager:
         format_config: str,
         format_type: str = "markdown",
         description: str = "",
-        keywords: Optional[List[str]] = None,
-        natural_language_trigger: Optional[List[str]] = None,
+        keywords: builtins.list[str] | None = None,
+        natural_language_trigger: builtins.list[str] | None = None,
         threshold: float = 0.7,
         priority: int = 50,
         enabled: bool = True,
-        policy_id: Optional[str] = None,
+        policy_id: str | None = None,
     ) -> str:
         """
         Add an OutputFormatter policy.
@@ -744,7 +748,7 @@ class PoliciesManager:
             logger.error(f"Failed to delete policy {policy_id}: {e}")
             return False
 
-    async def list(self) -> List[Dict[str, Any]]:
+    async def list(self) -> builtins.list[dict[str, Any]]:
         """
         List all policies.
 
@@ -768,14 +772,14 @@ class PoliciesManager:
             {
                 "id": p.id,
                 "name": p.name,
-                "type": p.policy_type.value if hasattr(p, 'policy_type') else p.type.value,
+                "type": p.policy_type.value if hasattr(p, "policy_type") else p.type.value,
                 "enabled": p.enabled,
                 "priority": p.priority,
             }
             for p in policies
         ]
 
-    async def get(self, policy_id: str) -> Optional[Dict[str, Any]]:
+    async def get(self, policy_id: str) -> dict[str, Any] | None:
         """
         Get a policy by ID.
 
@@ -803,7 +807,7 @@ class PoliciesManager:
                 return {
                     "id": p.id,
                     "name": p.name,
-                    "type": p.policy_type.value if hasattr(p, 'policy_type') else p.type.value,
+                    "type": p.policy_type.value if hasattr(p, "policy_type") else p.type.value,
                     "enabled": p.enabled,
                     "priority": p.priority,
                     "policy": p,  # Include full policy object
@@ -814,7 +818,7 @@ class PoliciesManager:
         self,
         file_path: str,
         clear_existing: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Load policies from a JSON file.
 
@@ -862,7 +866,9 @@ class PoliciesManager:
         # Reload policies in the system
         await policy_system.initialize()
 
-        logger.info(f"✅ Loaded {result['count']} policies from {file_path} (enabled: {result['enabled']})")
+        logger.info(
+            f"✅ Loaded {result['count']} policies from {file_path} (enabled: {result['enabled']})"
+        )
 
         return result
 
@@ -879,7 +885,7 @@ class PoliciesManager:
             ```
         """
         # Check if policy system is already initialized to avoid recursion
-        if hasattr(self._agent, '_policy_system') and self._agent._policy_system is not None:
+        if hasattr(self._agent, "_policy_system") and self._agent._policy_system is not None:
             policy_system = self._agent._policy_system
         else:
             policy_system = await self._ensure_policy_system()
@@ -906,7 +912,7 @@ class PoliciesManager:
         self,
         folder_path: str = ".cuga",
         clear_existing: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Load policies from a .cuga folder structure containing markdown files.
 
@@ -972,7 +978,7 @@ class PoliciesManager:
         from cuga.backend.cuga_graph.policy.folder_loader import load_policies_from_folder
 
         # Check if policy system is already initialized to avoid recursion
-        if hasattr(self._agent, '_policy_system') and self._agent._policy_system is not None:
+        if hasattr(self._agent, "_policy_system") and self._agent._policy_system is not None:
             policy_system = self._agent._policy_system
         else:
             # Ensure policy system is initialized BEFORE loading
@@ -982,7 +988,7 @@ class PoliciesManager:
                 return {"count": 0, "errors": ["Policy system is disabled"], "files": []}
 
         # Verify storage is connected
-        if not hasattr(policy_system, 'storage') or policy_system.storage is None:
+        if not hasattr(policy_system, "storage") or policy_system.storage is None:
             error_msg = "Policy storage not initialized"
             logger.error(error_msg)
             return {"count": 0, "errors": [error_msg], "files": []}
@@ -998,9 +1004,9 @@ class PoliciesManager:
         # Reinitialize policy system after loading
         await policy_system.initialize()
 
-        if result['errors']:
+        if result["errors"]:
             logger.warning(f"Encountered {len(result['errors'])} errors while loading policies:")
-            for error in result['errors']:
+            for error in result["errors"]:
                 logger.warning(f"  - {error}")
 
         logger.info(
@@ -1009,7 +1015,7 @@ class PoliciesManager:
 
         return result
 
-    async def _validate_and_sync(self, storage, folder_path: str) -> Dict[str, Any]:
+    async def _validate_and_sync(self, storage, folder_path: str) -> dict[str, Any]:
         """
         Validate and sync policies between filesystem and storage.
 
@@ -1059,7 +1065,9 @@ class PoliciesManager:
                     if policy:
                         await storage.save_policy(policy)
                         added_to_storage_count += 1
-                        logger.info(f"Added policy '{policy_id}' to storage (was only on filesystem)")
+                        logger.info(
+                            f"Added policy '{policy_id}' to storage (was only on filesystem)"
+                        )
                 except Exception as e:
                     error_msg = f"Failed to save policy '{policy_id}' to filesystem: {e}"
                     errors.append(error_msg)
@@ -1080,7 +1088,7 @@ class PoliciesManager:
                 "errors": [str(e)],
             }
 
-    async def sync_from_filesystem(self) -> Dict[str, Any]:
+    async def sync_from_filesystem(self) -> dict[str, Any]:
         """
         Sync policies from filesystem to storage.
 
@@ -1114,10 +1122,10 @@ class PoliciesManager:
             removed_ids = await self._fs_sync.sync_removals(policy_system.storage)
 
             return {
-                "loaded": load_result['count'],
+                "loaded": load_result["count"],
                 "removed": len(removed_ids),
-                "errors": load_result['errors'],
-                "files": load_result['files'],
+                "errors": load_result["errors"],
+                "files": load_result["files"],
             }
         except Exception as e:
             logger.error(f"Failed to sync from filesystem: {e}")
@@ -1196,16 +1204,16 @@ class CugaAgent:
 
     def __init__(
         self,
-        tools: Optional[List[BaseTool]] = None,
-        tool_provider: Optional[ToolProviderInterface] = None,
-        model: Optional[BaseChatModel] = None,
-        callbacks: Optional[List[BaseCallbackHandler]] = None,
-        policy_system: Optional[PolicyConfigurable] = None,
-        special_instructions: Optional[str] = None,
-        cuga_folder: Optional[str] = None,
-        auto_load_policies: Optional[bool] = None,
+        tools: list[BaseTool] | None = None,
+        tool_provider: ToolProviderInterface | None = None,
+        model: BaseChatModel | None = None,
+        callbacks: list[BaseCallbackHandler] | None = None,
+        policy_system: PolicyConfigurable | None = None,
+        special_instructions: str | None = None,
+        cuga_folder: str | None = None,
+        auto_load_policies: bool | None = None,
         reset_policy_storage: bool = False,
-        filesystem_sync: Optional[bool] = None,
+        filesystem_sync: bool | None = None,
     ):
         """
         Initialize the CUGA Agent.
@@ -1257,7 +1265,9 @@ class CugaAgent:
         # Use settings defaults if not provided
         self.cuga_folder = cuga_folder if cuga_folder is not None else settings.policy.cuga_folder
         self._auto_load_policies = (
-            auto_load_policies if auto_load_policies is not None else settings.policy.auto_load_policies
+            auto_load_policies
+            if auto_load_policies is not None
+            else settings.policy.auto_load_policies
         )
         self._filesystem_sync = (
             filesystem_sync if filesystem_sync is not None else settings.policy.filesystem_sync
@@ -1315,10 +1325,10 @@ class CugaAgent:
 
     async def _ensure_initialized(self):
         """Ensure tool provider is initialized."""
-        if not hasattr(self.tool_provider, 'initialized') or not self.tool_provider.initialized:
+        if not hasattr(self.tool_provider, "initialized") or not self.tool_provider.initialized:
             await self.tool_provider.initialize()
 
-    def _create_graph(self, thread_id: Optional[str] = None):
+    def _create_graph(self, thread_id: str | None = None):
         """Create the LangGraph graph with HITL support."""
         if self._graph is None:
             # Always create wrapper graph with HITL nodes (for policy support)
@@ -1326,7 +1336,7 @@ class CugaAgent:
             logger.debug("Created CugaLite graph with HITL wrapper")
         return self._graph
 
-    def _create_hitl_wrapper_graph(self, thread_id: Optional[str] = None):
+    def _create_hitl_wrapper_graph(self, thread_id: str | None = None):
         """Create a wrapper graph with HITL nodes around CugaLite subgraph.
 
         Graph structure (simplified for SDK):
@@ -1341,15 +1351,21 @@ class CugaAgent:
         Dummy nodes (APIPlannerAgent, ChatAgent, CugaLite) are added to support
         internal routing from CugaLiteSubgraph that references these nodes.
         """
-        from cuga.backend.cuga_graph.nodes.human_in_the_loop.suggest_actions import SuggestHumanActions
-        from cuga.backend.cuga_graph.nodes.human_in_the_loop.wait_for_response import WaitForResponse
+        from typing import Literal
+
+        from langgraph.types import Command
+
         from cuga.backend.cuga_graph.nodes.answer.final_answer import FinalAnswerNode
         from cuga.backend.cuga_graph.nodes.answer.final_answer_agent.final_answer_agent import (
             FinalAnswerAgent,
         )
-        from cuga.backend.cuga_graph.utils.nodes_names import NodeNames, ActionIds
-        from langgraph.types import Command
-        from typing import Literal
+        from cuga.backend.cuga_graph.nodes.human_in_the_loop.suggest_actions import (
+            SuggestHumanActions,
+        )
+        from cuga.backend.cuga_graph.nodes.human_in_the_loop.wait_for_response import (
+            WaitForResponse,
+        )
+        from cuga.backend.cuga_graph.utils.nodes_names import ActionIds, NodeNames
 
         # Create CugaLite subgraph
         cuga_lite_subgraph = create_cuga_lite_graph(
@@ -1363,17 +1379,17 @@ class CugaAgent:
         compiled_subgraph = cuga_lite_subgraph.compile()
 
         # Dummy nodes to support internal CugaLiteSubgraph routing
-        async def dummy_api_planner_node(state: AgentState) -> Command[Literal['SDKCallback']]:
+        async def dummy_api_planner_node(state: AgentState) -> Command[Literal["SDKCallback"]]:
             """Dummy APIPlannerAgent node - routes back to SDK callback."""
             logger.debug("Dummy APIPlannerAgent node - routing to SDKCallback")
             return Command(update=state.model_dump(), goto="SDKCallback")
 
-        async def dummy_chat_agent_node(state: AgentState) -> Command[Literal['SDKCallback']]:
+        async def dummy_chat_agent_node(state: AgentState) -> Command[Literal["SDKCallback"]]:
             """Dummy ChatAgent node - routes back to SDK callback."""
             logger.debug("Dummy ChatAgent node - routing to SDKCallback")
             return Command(update=state.model_dump(), goto="SDKCallback")
 
-        async def dummy_cuga_lite_node(state: AgentState) -> Command[Literal['SDKCallback']]:
+        async def dummy_cuga_lite_node(state: AgentState) -> Command[Literal["SDKCallback"]]:
             """Dummy CugaLite node - routes back to SDK callback."""
             logger.debug("Dummy CugaLite node - routing to SDKCallback")
             return Command(update=state.model_dump(), goto="SDKCallback")
@@ -1381,8 +1397,8 @@ class CugaAgent:
         # Create custom callback node for SDK (simpler than full CugaLiteNode)
         async def sdk_callback_node(
             state: AgentState,
-            config: Optional[RunnableConfig] = None,
-        ) -> Command[Literal['FinalAnswerAgent', 'SuggestHumanActions', 'CugaLiteSubgraph']]:
+            config: RunnableConfig | None = None,
+        ) -> Command[Literal["FinalAnswerAgent", "SuggestHumanActions", "CugaLiteSubgraph"]]:
             """Process results after CugaLite subgraph execution (SDK version)."""
             logger.info("SDK callback node - processing subgraph results")
 
@@ -1409,7 +1425,9 @@ class CugaAgent:
                 else:
                     logger.warning("User denied tool execution - stopping execution")
                     # User denied - set final answer and end
-                    policy_name = state.cuga_lite_metadata.get("policy_name", "Tool Approval Policy")
+                    policy_name = state.cuga_lite_metadata.get(
+                        "policy_name", "Tool Approval Policy"
+                    )
                     state.final_answer = f"❌ **Execution Cancelled**\n\nYou denied the execution of restricted tools required by **{policy_name}**.\n\nThe agent will not proceed with this task."
                     state.execution_complete = True
                     # Set sender to CugaLite so FinalAnswerAgent handles it properly
@@ -1428,7 +1446,9 @@ class CugaAgent:
                 )
 
             # Check for OutputFormatter policies before finalizing response
-            from cuga.backend.cuga_graph.policy.output_formatter_utils import apply_output_formatter_policies
+            from cuga.backend.cuga_graph.policy.output_formatter_utils import (
+                apply_output_formatter_policies,
+            )
 
             await apply_output_formatter_policies(state, config, context="SDK Callback")
 
@@ -1558,13 +1578,13 @@ class CugaAgent:
 
     async def invoke(
         self,
-        message: Union[str, List[BaseMessage], None] = None,
-        thread_id: Optional[str] = None,
-        config: Optional[Dict[str, Any]] = None,
-        action_response: Optional[Any] = None,
-        user_context: Optional[str] = None,
+        message: str | list[BaseMessage] | None = None,
+        thread_id: str | None = None,
+        config: dict[str, Any] | None = None,
+        action_response: Any | None = None,
+        user_context: str | None = None,
         track_tool_calls: bool = False,
-        variables: Optional[Dict[str, Any]] = None,
+        variables: dict[str, Any] | None = None,
     ) -> InvokeResult:
         """
         Invoke the agent with a message and get the response.
@@ -1629,7 +1649,9 @@ class CugaAgent:
 
         # Initialize policy system if auto_load_policies is enabled and not yet initialized
         # This ensures policies are loaded before first invocation
-        if self._auto_load_policies and (not hasattr(self, '_policy_system') or self._policy_system is None):
+        if self._auto_load_policies and (
+            not hasattr(self, "_policy_system") or self._policy_system is None
+        ):
             await self.policies._ensure_policy_system()
             logger.debug("Policy system auto-initialized during first invoke()")
 
@@ -1674,7 +1696,7 @@ class CugaAgent:
 
             error_msg = None
             if not final_answer and result.get("error"):
-                error_msg = result['error']
+                error_msg = result["error"]
                 final_answer = f"Error: {error_msg}"
 
             # Check if graph interrupted again
@@ -1777,7 +1799,9 @@ class CugaAgent:
                     var_manager.add_variable(
                         var_value, name=var_name, description=f"Passed from supervisor: {var_name}"
                     )
-                logger.debug(f"Injected {len(variables)} variables into new state: {list(variables.keys())}")
+                logger.debug(
+                    f"Injected {len(variables)} variables into new state: {list(variables.keys())}"
+                )
 
             logger.debug(f"Created new state for thread_id: {thread_id}")
 
@@ -1803,7 +1827,7 @@ class CugaAgent:
         error_msg = None
 
         if not final_answer and result.get("error"):
-            error_msg = result['error']
+            error_msg = result["error"]
             final_answer = f"Error: {error_msg}"
 
         # Check if graph interrupted for approval
@@ -1831,10 +1855,10 @@ class CugaAgent:
 
     async def stream(
         self,
-        message: Union[str, List[BaseMessage], None] = None,
-        thread_id: Optional[str] = None,
-        config: Optional[Dict[str, Any]] = None,
-        action_response: Optional[Any] = None,  # ActionResponse for resuming after HITL
+        message: str | list[BaseMessage] | None = None,
+        thread_id: str | None = None,
+        config: dict[str, Any] | None = None,
+        action_response: Any | None = None,  # ActionResponse for resuming after HITL
     ):
         """
         Stream the agent's execution step by step.
@@ -1870,7 +1894,9 @@ class CugaAgent:
 
         # Initialize policy system if auto_load_policies is enabled and not yet initialized
         # This ensures policies are loaded before first stream
-        if self._auto_load_policies and (not hasattr(self, '_policy_system') or self._policy_system is None):
+        if self._auto_load_policies and (
+            not hasattr(self, "_policy_system") or self._policy_system is None
+        ):
             await self.policies._ensure_policy_system()
             logger.debug("Policy system auto-initialized during first stream()")
 
@@ -1900,7 +1926,9 @@ class CugaAgent:
             # If action_response provided, update state with it
             if action_response:
                 self.graph.update_state(run_config, {"hitl_response": action_response})
-                logger.info(f"Streaming resume after HITL response (action_id: {action_response.action_id})")
+                logger.info(
+                    f"Streaming resume after HITL response (action_id: {action_response.action_id})"
+                )
 
             # Stream resume by invoking with None
             async for state in self.graph.astream(
@@ -1988,7 +2016,7 @@ class CugaAgent:
                 "Use a custom tool provider for dynamic tool management."
             )
 
-    def add_tools(self, tools: List[BaseTool]):
+    def add_tools(self, tools: list[BaseTool]):
         """
         Add multiple tools to the agent dynamically.
 
@@ -2059,10 +2087,10 @@ class CugaSupervisor:
 
     def __init__(
         self,
-        agents: Optional[Dict[str, Union[CugaAgent, Dict[str, Any]]]] = None,
-        model: Optional[BaseChatModel] = None,
-        description: Optional[str] = None,
-        callbacks: Optional[List[BaseCallbackHandler]] = None,
+        agents: dict[str, CugaAgent | dict[str, Any]] | None = None,
+        model: BaseChatModel | None = None,
+        description: str | None = None,
+        callbacks: list[BaseCallbackHandler] | None = None,
     ):
         """
         Initialize supervisor.
@@ -2093,7 +2121,7 @@ class CugaSupervisor:
             logger.info(f"Using default model: {self._model.__class__.__name__}")
 
     @classmethod
-    async def from_yaml(cls, yaml_path: str) -> "CugaSupervisor":
+    async def from_yaml(cls, yaml_path: str) -> CugaSupervisor:
         """
         Load supervisor configuration from YAML file.
 
@@ -2124,10 +2152,11 @@ class CugaSupervisor:
             Compiled LangGraph graph
         """
         if self._compiled_graph is None:
+            from langgraph.checkpoint.memory import MemorySaver
+
             from cuga.backend.cuga_graph.nodes.cuga_supervisor.cuga_supervisor_graph import (
                 create_cuga_supervisor_graph,
             )
-            from langgraph.checkpoint.memory import MemorySaver
 
             # Create supervisor subgraph
             supervisor_subgraph = create_cuga_supervisor_graph(
@@ -2144,9 +2173,9 @@ class CugaSupervisor:
 
     async def invoke(
         self,
-        message: Optional[str],
-        thread_id: Optional[str] = None,
-        action_response: Optional[Any] = None,
+        message: str | None,
+        thread_id: str | None = None,
+        action_response: Any | None = None,
     ) -> InvokeResult:
         """
         Invoke the supervisor with a message.
@@ -2160,6 +2189,7 @@ class CugaSupervisor:
             InvokeResult containing answer and metadata
         """
         import uuid
+
         from langchain_core.messages import HumanMessage
 
         # Setup config
@@ -2215,7 +2245,9 @@ class CugaSupervisor:
 
         # Get tool calls if available
         tool_calls = (
-            result.get("tool_calls", []) if isinstance(result, dict) else getattr(result, "tool_calls", [])
+            result.get("tool_calls", [])
+            if isinstance(result, dict)
+            else getattr(result, "tool_calls", [])
         )
 
         return InvokeResult(
@@ -2242,7 +2274,7 @@ class CugaSupervisor:
         else:
             return self._supervisor_state.supervisor_variables_manager
 
-    def add_agent(self, name: str, agent: Union[CugaAgent, Dict[str, Any]]) -> None:
+    def add_agent(self, name: str, agent: CugaAgent | dict[str, Any]) -> None:
         """
         Add an agent to the supervisor.
 
@@ -2269,8 +2301,8 @@ class CugaSupervisor:
 # Convenience function for quick usage
 async def run_agent(
     message: str,
-    tools: Optional[List[BaseTool]] = None,
-    model: Optional[BaseChatModel] = None,
+    tools: list[BaseTool] | None = None,
+    model: BaseChatModel | None = None,
 ) -> str:
     """
     Convenience function to quickly run an agent with a single message.

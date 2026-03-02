@@ -64,17 +64,25 @@ declare global {
   }
 }
 
-const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDraftAgent }) => {
+const CardManager: React.FC<CardManagerProps> = ({
+  chatInstance,
+  threadId,
+  useDraftAgent,
+}) => {
   const [currentSteps, setCurrentSteps] = useState<Step[]>([]);
   const [currentCardId, setCurrentCardId] = useState<string | null>(null);
   const [isProcessingComplete, setIsProcessingComplete] = useState(false);
-  const [showDetails, setShowDetails] = useState<{ [key: string]: boolean }>({});
+  const [showDetails, setShowDetails] = useState<{ [key: string]: boolean }>(
+    {},
+  );
   const [isReasoningCollapsed, setIsReasoningCollapsed] = useState(false);
   const [hasFinalAnswer, setHasFinalAnswer] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isStopped, setIsStopped] = useState(false);
   const [viewMode, setViewMode] = useState<"inplace" | "append">("inplace");
-  const [globalVariables, setGlobalVariables] = useState<Record<string, any>>({});
+  const [globalVariables, setGlobalVariables] = useState<Record<string, any>>(
+    {},
+  );
   const [variablesHistory, setVariablesHistory] = useState<
     Array<{
       id: string;
@@ -84,14 +92,20 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
     }>
   >([]);
   const [selectedAnswerId, setSelectedAnswerId] = useState<string | null>(null);
-  const [expandedCodePreviews, setExpandedCodePreviews] = useState<{ [key: string]: boolean }>({});
+  const [expandedCodePreviews, setExpandedCodePreviews] = useState<{
+    [key: string]: boolean;
+  }>({});
   // Loader for next step within this card is derived from processing state
   const cardRef = useRef<HTMLDivElement>(null);
   const stepRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   // Function to mark a step as completed
   const markStepCompleted = useCallback((stepId: string) => {
-    setCurrentSteps((prev) => prev.map((step) => (step.id === stepId ? { ...step, completed: true } : step)));
+    setCurrentSteps((prev) =>
+      prev.map((step) =>
+        step.id === stepId ? { ...step, completed: true } : step,
+      ),
+    );
   }, []);
 
   // Initialize global interface
@@ -108,12 +122,18 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
           console.log("🎯 Current steps before adding:", currentSteps.length);
 
           // If content is JSON string, try to parse and log it
-          if (typeof content === "string" && (content.startsWith("{") || content.startsWith("["))) {
+          if (
+            typeof content === "string" &&
+            (content.startsWith("{") || content.startsWith("["))
+          ) {
             try {
               const parsed = JSON.parse(content);
               console.log("🎯 Parsed content:", parsed);
               console.log("🎯 Has variables:", !!parsed.variables);
-              console.log("🎯 Variables keys:", parsed.variables ? Object.keys(parsed.variables) : []);
+              console.log(
+                "🎯 Variables keys:",
+                parsed.variables ? Object.keys(parsed.variables) : [],
+              );
             } catch (e) {
               console.log("🎯 Failed to parse content as JSON");
             }
@@ -129,7 +149,10 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
           };
 
           setCurrentSteps((prev) => {
-            console.log("🎯 setCurrentSteps called with prev length:", prev.length);
+            console.log(
+              "🎯 setCurrentSteps called with prev length:",
+              prev.length,
+            );
             // If this is the first step, start a new card
             if (prev.length === 0) {
               const newCardId = `card-${Date.now()}`;
@@ -163,7 +186,9 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
 
           // Check if this is a final answer step (only Answer, not FinalAnswerAgent)
           if (title === "Answer") {
-            console.log("🎯 Final answer detected, triggering reasoning collapse");
+            console.log(
+              "🎯 Final answer detected, triggering reasoning collapse",
+            );
             setHasFinalAnswer(true);
             // Collapse reasoning immediately when final answer arrives
             setIsReasoningCollapsed(true);
@@ -250,7 +275,10 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
 
   // Extract variables from final answer steps and track by turn
   useEffect(() => {
-    console.log("[Variables Debug] Processing steps, total:", currentSteps.length);
+    console.log(
+      "[Variables Debug] Processing steps, total:",
+      currentSteps.length,
+    );
     const newHistory: Array<{
       id: string;
       title: string;
@@ -261,7 +289,12 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
     let turnNumber = 0;
 
     currentSteps.forEach((step) => {
-      console.log("[Variables Debug] Step:", step.title, "Type:", typeof step.content);
+      console.log(
+        "[Variables Debug] Step:",
+        step.title,
+        "Type:",
+        typeof step.content,
+      );
 
       // Only process Answer or FinalAnswerAgent steps
       if (step.title !== "Answer" && step.title !== "FinalAnswerAgent") {
@@ -277,30 +310,52 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
         if (typeof step.content === "string") {
           try {
             parsedContent = JSON.parse(step.content);
-            console.log("[Variables Debug] Parsed JSON content:", parsedContent);
+            console.log(
+              "[Variables Debug] Parsed JSON content:",
+              parsedContent,
+            );
 
             // Check if we have variables in the parsed content
             if (parsedContent.data !== undefined && parsedContent.variables) {
               variables = parsedContent.variables;
-              console.log("[Variables Debug] Found variables in data:", variables);
+              console.log(
+                "[Variables Debug] Found variables in data:",
+                variables,
+              );
             } else if (parsedContent.variables) {
               variables = parsedContent.variables;
-              console.log("[Variables Debug] Found variables directly:", variables);
+              console.log(
+                "[Variables Debug] Found variables directly:",
+                variables,
+              );
             }
           } catch (e) {
             console.log("[Variables Debug] Failed to parse JSON:", e);
           }
-        } else if (step.content && typeof step.content === "object" && "variables" in step.content) {
-          const contentWithVars = step.content as { variables?: Record<string, any> };
+        } else if (
+          step.content &&
+          typeof step.content === "object" &&
+          "variables" in step.content
+        ) {
+          const contentWithVars = step.content as {
+            variables?: Record<string, any>;
+          };
           if (contentWithVars.variables) {
             variables = contentWithVars.variables;
-            console.log("[Variables Debug] Found variables in object:", variables);
+            console.log(
+              "[Variables Debug] Found variables in object:",
+              variables,
+            );
           }
         }
 
         // Only add to history if this step has variables
         if (Object.keys(variables).length > 0) {
-          console.log("[Variables Debug] Adding to history with", Object.keys(variables).length, "variables");
+          console.log(
+            "[Variables Debug] Adding to history with",
+            Object.keys(variables).length,
+            "variables",
+          );
           newHistory.push({
             id: step.id,
             title: `Turn ${turnNumber}`,
@@ -320,7 +375,12 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
     setVariablesHistory((prev) => {
       // Check if history actually changed
       if (prev.length !== newHistory.length) {
-        console.log("Variables history updated: length changed", prev.length, "->", newHistory.length);
+        console.log(
+          "Variables history updated: length changed",
+          prev.length,
+          "->",
+          newHistory.length,
+        );
         return newHistory;
       }
 
@@ -345,24 +405,36 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
     setSelectedAnswerId((currentSelectedId) => {
       // If we have new history from current steps, use that
       if (newHistory.length > 0) {
-        if (currentSelectedId && newHistory.find((e) => e.id === currentSelectedId)) {
+        if (
+          currentSelectedId &&
+          newHistory.find((e) => e.id === currentSelectedId)
+        ) {
           // Keep current selection if it still exists in new history
           return currentSelectedId;
         }
         // Auto-select most recent from new history
-        console.log("Auto-selecting most recent turn:", newHistory[newHistory.length - 1].title);
+        console.log(
+          "Auto-selecting most recent turn:",
+          newHistory[newHistory.length - 1].title,
+        );
         return newHistory[newHistory.length - 1].id;
       }
 
       // No new history from current steps, check if we have existing history
       // This happens when forceReset is called - we want to preserve selection
       if (variablesHistory.length > 0) {
-        if (currentSelectedId && variablesHistory.find((e) => e.id === currentSelectedId)) {
+        if (
+          currentSelectedId &&
+          variablesHistory.find((e) => e.id === currentSelectedId)
+        ) {
           // Keep current selection if it exists in existing history
           return currentSelectedId;
         }
         // Auto-select most recent from existing history
-        console.log("Preserving selection from existing history:", variablesHistory[variablesHistory.length - 1].title);
+        console.log(
+          "Preserving selection from existing history:",
+          variablesHistory[variablesHistory.length - 1].title,
+        );
         return variablesHistory[variablesHistory.length - 1].id;
       }
 
@@ -380,7 +452,9 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
       }
     } else if (variablesHistory.length > 0) {
       // Default to most recent
-      setGlobalVariables(variablesHistory[variablesHistory.length - 1].variables);
+      setGlobalVariables(
+        variablesHistory[variablesHistory.length - 1].variables,
+      );
     } else {
       setGlobalVariables({});
     }
@@ -433,11 +507,17 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
   }, []);
 
   // Function to generate natural language descriptions for each case
-  const getCaseDescription = (stepId: string, stepTitle: string, parsedContent: any) => {
+  const getCaseDescription = (
+    stepId: string,
+    stepTitle: string,
+    parsedContent: any,
+  ) => {
     switch (stepTitle) {
       case "PlanControllerAgent":
         if (parsedContent.subtasks_progress && parsedContent.next_subtask) {
-          const completed = parsedContent.subtasks_progress.filter((status: string) => status === "completed").length;
+          const completed = parsedContent.subtasks_progress.filter(
+            (status: string) => status === "completed",
+          ).length;
           const total = parsedContent.subtasks_progress.length;
 
           if (total === 0) {
@@ -470,19 +550,28 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
           const actionType = parsedContent.action;
           if (actionType === "CoderAgent") {
             return `I'm preparing to write code for you. The task involves: <span style="color:${HIGHLIGHT_COLOR}; font-weight: 600;">${
-              parsedContent.action_input_coder_agent?.task_description || "Code generation task"
+              parsedContent.action_input_coder_agent?.task_description ||
+              "Code generation task"
             }</span>`;
           } else if (actionType === "ApiShortlistingAgent") {
-            const taskDesc = parsedContent.action_input_shortlisting_agent?.task_description;
+            const taskDesc =
+              parsedContent.action_input_shortlisting_agent?.task_description;
             if (taskDesc) {
-              const preview = taskDesc.length > 60 ? taskDesc.substring(0, 60) + "..." : taskDesc;
+              const preview =
+                taskDesc.length > 60
+                  ? taskDesc.substring(0, 60) + "..."
+                  : taskDesc;
               return `I'm analyzing available APIs, <span style="color:${HIGHLIGHT_COLOR}; font-weight:500;">${preview}</span>`;
             }
             return `I'm analyzing available APIs to find the best options for your request. This will help me understand what tools are available to accomplish your task.`;
           } else if (actionType === "ConcludeTask") {
-            const taskDesc = parsedContent.action_input_conclude_task?.final_response;
+            const taskDesc =
+              parsedContent.action_input_conclude_task?.final_response;
             if (taskDesc) {
-              const preview = taskDesc.length > 60 ? taskDesc.substring(0, 60) + "..." : taskDesc;
+              const preview =
+                taskDesc.length > 60
+                  ? taskDesc.substring(0, 60) + "..."
+                  : taskDesc;
               return `I'm ready to provide you with the final answer based on all the work completed so far. <span style="color:${HIGHLIGHT_COLOR}; font-weight:500;">${preview}</span>`;
             }
             return `I'm ready to provide you with the final answer based on all the work completed so far.`;
@@ -500,22 +589,22 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
           const icon = isBlocked
             ? "🛑"
             : policyType === "playbook"
-            ? "📖"
-            : policyType === "tool_guide"
-            ? "🔧"
-            : policyType === "tool_approval"
-            ? "✋"
-            : "📋";
+              ? "📖"
+              : policyType === "tool_guide"
+                ? "🔧"
+                : policyType === "tool_approval"
+                  ? "✋"
+                  : "📋";
           const color = isBlocked ? "#ff6b6b" : "#3b82f6";
           const action = isBlocked
             ? "Blocked"
             : policyType === "playbook"
-            ? "Activated"
-            : policyType === "tool_guide"
-            ? "Enriched"
-            : policyType === "tool_approval"
-            ? "Requires Approval"
-            : "Active";
+              ? "Activated"
+              : policyType === "tool_guide"
+                ? "Enriched"
+                : policyType === "tool_approval"
+                  ? "Requires Approval"
+                  : "Active";
 
           return `<span style="color: ${color}; font-weight: 600;">${icon} Policy ${action}</span> - <span style="color:${HIGHLIGHT_COLOR}; font-weight: 600;">${policyName}</span> (${policyType})`;
         }
@@ -524,7 +613,8 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
       case "PolicyBlock":
         // Legacy support
         if (parsedContent && parsedContent.type === "policy_block") {
-          const policyName = parsedContent.metadata?.policy_name || "Security Policy";
+          const policyName =
+            parsedContent.metadata?.policy_name || "Security Policy";
           return `<span style="color: #ff6b6b; font-weight: 600;">🛡️ Intent Blocked</span> - Your request was blocked by <span style="color:${HIGHLIGHT_COLOR}; font-weight: 600;">${policyName}</span> for security reasons.`;
         }
         return "Policy enforcement in progress...";
@@ -532,15 +622,19 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
       case "PolicyPlaybook":
         // Legacy support
         if (parsedContent && parsedContent.type === "policy_playbook") {
-          const playbookName = parsedContent.metadata?.policy_name || "Workflow Playbook";
+          const playbookName =
+            parsedContent.metadata?.policy_name || "Workflow Playbook";
           return `<span style="color: #3b82f6; font-weight: 600;">📖 Playbook Activated</span> - Following <span style="color:${HIGHLIGHT_COLOR}; font-weight: 600;">${playbookName}</span> to guide you through this process.`;
         }
         return "A security policy has been applied to your request.";
 
       case "CodeAgent":
         // Check if we have meaningful content
-        const hasCode = parsedContent.code && parsedContent.code.trim().length > 0;
-        const hasOutput = parsedContent.execution_output && parsedContent.execution_output.trim().length > 0;
+        const hasCode =
+          parsedContent.code && parsedContent.code.trim().length > 0;
+        const hasOutput =
+          parsedContent.execution_output &&
+          parsedContent.execution_output.trim().length > 0;
 
         if (hasCode || hasOutput) {
           // Handle case where we have code
@@ -548,7 +642,9 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
           const allCodeLines = hasCode ? parsedContent.code.split("\n") : [];
           const isExpanded = expandedCodePreviews[stepId];
           const maxPreviewLines = 4;
-          const codePreviewLines = isExpanded ? allCodeLines : allCodeLines.slice(0, maxPreviewLines);
+          const codePreviewLines = isExpanded
+            ? allCodeLines
+            : allCodeLines.slice(0, maxPreviewLines);
           const hasMoreLines = codeLines > maxPreviewLines;
 
           return (
@@ -558,14 +654,18 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                   {parsedContent.execution_output ? (
                     <span>
                       I've generated and executed{" "}
-                      <span style={{ color: HIGHLIGHT_COLOR, fontWeight: 600 }}>{codeLines} lines of code</span>. Code
-                      preview:
+                      <span style={{ color: HIGHLIGHT_COLOR, fontWeight: 600 }}>
+                        {codeLines} lines of code
+                      </span>
+                      . Code preview:
                     </span>
                   ) : (
                     <span>
                       I've generated{" "}
-                      <span style={{ color: HIGHLIGHT_COLOR, fontWeight: 600 }}>{codeLines} lines of code</span> to
-                      accomplish your request. Preview:
+                      <span style={{ color: HIGHLIGHT_COLOR, fontWeight: 600 }}>
+                        {codeLines} lines of code
+                      </span>{" "}
+                      to accomplish your request. Preview:
                     </span>
                   )}
                   <div
@@ -591,7 +691,9 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                         </div>
                       );
                     })}
-                    {!isExpanded && hasMoreLines && <div style={{ color: "#94a3b8" }}>...</div>}
+                    {!isExpanded && hasMoreLines && (
+                      <div style={{ color: "#94a3b8" }}>...</div>
+                    )}
                     {hasMoreLines && (
                       <button
                         onClick={(e) => {
@@ -611,8 +713,12 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                           cursor: "pointer",
                           fontFamily: "sans-serif",
                         }}
-                        onMouseOver={(e) => (e.currentTarget.style.background = "#4f46e5")}
-                        onMouseOut={(e) => (e.currentTarget.style.background = "#6366f1")}
+                        onMouseOver={(e) =>
+                          (e.currentTarget.style.background = "#4f46e5")
+                        }
+                        onMouseOut={(e) =>
+                          (e.currentTarget.style.background = "#6366f1")
+                        }
                       >
                         {isExpanded ? "▲ Less" : "▼ More"}
                       </button>
@@ -621,20 +727,33 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                 </>
               )}
 
-              {!hasCode && parsedContent.execution_output && <span>Code execution completed. Output:</span>}
+              {!hasCode && parsedContent.execution_output && (
+                <span>Code execution completed. Output:</span>
+              )}
 
               {parsedContent.execution_output &&
                 (() => {
                   const output = parsedContent.execution_output.trim();
                   const outputLines = output.split("\n");
-                  const isOutputExpanded = expandedCodePreviews[`${stepId}_output`];
+                  const isOutputExpanded =
+                    expandedCodePreviews[`${stepId}_output`];
                   const maxPreviewLines = 3;
-                  const previewLines = isOutputExpanded ? outputLines : outputLines.slice(0, maxPreviewLines);
-                  const hasMoreOutput = outputLines.length > maxPreviewLines || output.length > 300;
+                  const previewLines = isOutputExpanded
+                    ? outputLines
+                    : outputLines.slice(0, maxPreviewLines);
+                  const hasMoreOutput =
+                    outputLines.length > maxPreviewLines || output.length > 300;
 
                   return (
                     <div style={{ marginTop: "8px" }}>
-                      <div style={{ fontSize: "12px", color: "#059669", fontWeight: 500, marginBottom: "4px" }}>
+                      <div
+                        style={{
+                          fontSize: "12px",
+                          color: "#059669",
+                          fontWeight: 500,
+                          marginBottom: "4px",
+                        }}
+                      >
                         Execution Output:
                       </div>
                       <div
@@ -661,7 +780,9 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                             </div>
                           );
                         })}
-                        {!isOutputExpanded && hasMoreOutput && <div style={{ color: "#94a3b8" }}>...</div>}
+                        {!isOutputExpanded && hasMoreOutput && (
+                          <div style={{ color: "#94a3b8" }}>...</div>
+                        )}
                         {hasMoreOutput && (
                           <button
                             onClick={(e) => {
@@ -681,8 +802,12 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                               cursor: "pointer",
                               fontFamily: "sans-serif",
                             }}
-                            onMouseOver={(e) => (e.currentTarget.style.background = "#059669")}
-                            onMouseOut={(e) => (e.currentTarget.style.background = "#10b981")}
+                            onMouseOver={(e) =>
+                              (e.currentTarget.style.background = "#059669")
+                            }
+                            onMouseOut={(e) =>
+                              (e.currentTarget.style.background = "#10b981")
+                            }
                           >
                             {isOutputExpanded ? "▲ Less" : "▼ More"}
                           </button>
@@ -703,7 +828,9 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
           const isExpanded = expandedCodePreviews[stepId];
           const maxPreviewLength = 200;
           const hasMoreContent = parsedContent.length > maxPreviewLength;
-          const displayContent = isExpanded ? parsedContent : parsedContent.substring(0, maxPreviewLength);
+          const displayContent = isExpanded
+            ? parsedContent
+            : parsedContent.substring(0, maxPreviewLength);
 
           return (
             <div>
@@ -726,7 +853,9 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                 }}
               >
                 {displayContent}
-                {!isExpanded && hasMoreContent && <span style={{ color: "#94a3b8" }}>...</span>}
+                {!isExpanded && hasMoreContent && (
+                  <span style={{ color: "#94a3b8" }}>...</span>
+                )}
                 {hasMoreContent && (
                   <button
                     onClick={(e) => {
@@ -746,8 +875,12 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                       cursor: "pointer",
                       fontFamily: "sans-serif",
                     }}
-                    onMouseOver={(e) => (e.currentTarget.style.background = "#475569")}
-                    onMouseOut={(e) => (e.currentTarget.style.background = "#64748b")}
+                    onMouseOver={(e) =>
+                      (e.currentTarget.style.background = "#475569")
+                    }
+                    onMouseOut={(e) =>
+                      (e.currentTarget.style.background = "#64748b")
+                    }
                   >
                     {isExpanded ? "▲ Less" : "▼ More"}
                   </button>
@@ -765,9 +898,10 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
           const topResult = parsedContent.result[0];
           const topScore = topResult?.relevance_score || 0;
           const apiName = topResult?.name || topResult?.title || "Unknown API";
-          const truncatedName = apiName.length > 30 ? apiName.substring(0, 30) + "..." : apiName;
+          const truncatedName =
+            apiName.length > 30 ? apiName.substring(0, 30) + "..." : apiName;
           return `I've analyzed and shortlisted <span style="color:${HIGHLIGHT_COLOR}; font-weight: 600;">${apiCount} relevant APIs</span> for your request. The top match is <span style="color:${HIGHLIGHT_COLOR}; font-weight: 600;">${truncatedName}</span> with a <span style="color:${HIGHLIGHT_COLOR}; font-weight: 600;">${Math.round(
-            topScore * 100
+            topScore * 100,
           )}% relevance score</span>.`;
         }
         return "I'm analyzing available APIs to find the most relevant ones for your request.";
@@ -775,7 +909,10 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
       case "TaskAnalyzerAgent":
         if (parsedContent && Array.isArray(parsedContent)) {
           const appNames = parsedContent
-            .map((app) => `<span style="color:${HIGHLIGHT_COLOR}; font-weight: 600;">${app.name}</span>`)
+            .map(
+              (app) =>
+                `<span style="color:${HIGHLIGHT_COLOR}; font-weight: 600;">${app.name}</span>`,
+            )
             .join(", ");
           return `I've identified <span style="color:${HIGHLIGHT_COLOR}; font-weight: 600;">${parsedContent.length} integrated applications</span> that can help with your request: ${appNames}. These apps are ready to be used in the workflow.`;
         }
@@ -801,7 +938,8 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
         return "I'm preparing the final answer to your request.";
 
       case "ReuseAgent":
-        if (typeof parsedContent === "string") return parsedContent.split("\n")[0];
+        if (typeof parsedContent === "string")
+          return parsedContent.split("\n")[0];
         return "Save and reuse operation completed.";
 
       case "SuggestHumanActions":
@@ -810,8 +948,14 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
         }
         return "I'm preparing suggestions for your next action.";
       case "APICodePlannerAgent":
-        const contentPreview = typeof parsedContent === "string" ? parsedContent : JSON.stringify(parsedContent);
-        const preview = contentPreview.length > 80 ? contentPreview.substring(0, 80) + "..." : contentPreview;
+        const contentPreview =
+          typeof parsedContent === "string"
+            ? parsedContent
+            : JSON.stringify(parsedContent);
+        const preview =
+          contentPreview.length > 80
+            ? contentPreview.substring(0, 80) + "..."
+            : contentPreview;
         return `I've generated a plan for the coding agent to follow. Plan preview: <span style="color:${HIGHLIGHT_COLOR}; font-weight:500;">${preview}</span>`;
       default:
         return "";
@@ -830,8 +974,14 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
             const keys = Object.keys(parsedContent);
 
             console.log(`[${step.title}] Raw parsed content:`, parsedContent);
-            console.log(`[${step.title}] Has data:`, parsedContent.data !== undefined);
-            console.log(`[${step.title}] Has variables:`, !!parsedContent.variables);
+            console.log(
+              `[${step.title}] Has data:`,
+              parsedContent.data !== undefined,
+            );
+            console.log(
+              `[${step.title}] Has variables:`,
+              !!parsedContent.variables,
+            );
 
             // Check if we have variables in the parsed content
             if (parsedContent.data !== undefined && parsedContent.variables) {
@@ -839,35 +989,57 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
 
               // Parse data if it's a JSON string
               let dataValue = parsedContent.data;
-              let extractedPolicies: any[] = parsedContent.active_policies || [];
-              
+              let extractedPolicies: any[] =
+                parsedContent.active_policies || [];
+
               if (typeof dataValue === "string") {
                 try {
                   const parsedData = JSON.parse(dataValue);
                   // Check if the parsed data is a policy object
-                  if (parsedData && typeof parsedData === "object" && parsedData.type === "policy") {
+                  if (
+                    parsedData &&
+                    typeof parsedData === "object" &&
+                    parsedData.type === "policy"
+                  ) {
                     extractedPolicies = [parsedData];
                     // Use the content as final_answer if it's a policy
-                    dataValue = parsedData.content || parsedData.response_content || dataValue;
+                    dataValue =
+                      parsedData.content ||
+                      parsedData.response_content ||
+                      dataValue;
                   }
                 } catch (e) {
                   // Not JSON, keep as string
                 }
-              } else if (dataValue && typeof dataValue === "object" && dataValue.type === "policy") {
+              } else if (
+                dataValue &&
+                typeof dataValue === "object" &&
+                dataValue.type === "policy"
+              ) {
                 // Data is already a policy object
                 extractedPolicies = [dataValue];
-                dataValue = dataValue.content || dataValue.response_content || "";
+                dataValue =
+                  dataValue.content || dataValue.response_content || "";
               }
 
               // For Answer step with variables: treat data as final_answer
-              if (step.title === "Answer" || step.title === "FinalAnswerAgent") {
+              if (
+                step.title === "Answer" ||
+                step.title === "FinalAnswerAgent"
+              ) {
                 parsedContent = {
                   final_answer: dataValue,
                   variables: parsedContent.variables,
                   active_policies: extractedPolicies,
                 };
-                console.log(`[${step.title}] Converted to final_answer format:`, parsedContent);
-              } else if (typeof parsedContent.data === "object" && !Array.isArray(parsedContent.data)) {
+                console.log(
+                  `[${step.title}] Converted to final_answer format:`,
+                  parsedContent,
+                );
+              } else if (
+                typeof parsedContent.data === "object" &&
+                !Array.isArray(parsedContent.data)
+              ) {
                 // Keep both data and variables if data is an object
                 parsedContent = {
                   ...parsedContent.data,
@@ -886,17 +1058,25 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
               // Only data, no variables - check if data is a policy JSON string
               let dataValue = parsedContent.data;
               let extractedPolicies: any[] = [];
-              
+
               if (typeof dataValue === "string") {
                 try {
                   const parsedData = JSON.parse(dataValue);
-                  if (parsedData && typeof parsedData === "object" && parsedData.type === "policy") {
+                  if (
+                    parsedData &&
+                    typeof parsedData === "object" &&
+                    parsedData.type === "policy"
+                  ) {
                     extractedPolicies = [parsedData];
                     // For playbook, the content is the guide, not the final answer
                     // The final answer should come from elsewhere or be empty
                     const isPlaybook = parsedData.policy_type === "playbook";
                     parsedContent = {
-                      final_answer: isPlaybook ? "" : (parsedData.content || parsedData.response_content || ""),
+                      final_answer: isPlaybook
+                        ? ""
+                        : parsedData.content ||
+                          parsedData.response_content ||
+                          "",
                       active_policies: extractedPolicies,
                     };
                   } else {
@@ -905,11 +1085,17 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                 } catch (e) {
                   parsedContent = dataValue;
                 }
-              } else if (dataValue && typeof dataValue === "object" && dataValue.type === "policy") {
+              } else if (
+                dataValue &&
+                typeof dataValue === "object" &&
+                dataValue.type === "policy"
+              ) {
                 extractedPolicies = [dataValue];
                 const isPlaybook = dataValue.policy_type === "playbook";
                 parsedContent = {
-                  final_answer: isPlaybook ? "" : (dataValue.content || dataValue.response_content || ""),
+                  final_answer: isPlaybook
+                    ? ""
+                    : dataValue.content || dataValue.response_content || "",
                   active_policies: extractedPolicies,
                 };
               } else {
@@ -937,7 +1123,11 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
           parsedContent.additional_data &&
           parsedContent.additional_data.tool
         ) {
-          const newElem = <ToolCallFlowDisplay toolData={parsedContent.additional_data.tool} />;
+          const newElem = (
+            <ToolCallFlowDisplay
+              toolData={parsedContent.additional_data.tool}
+            />
+          );
           outputElements.push(newElem);
         }
 
@@ -950,7 +1140,9 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
             }
             break;
           case "TaskDecompositionAgent":
-            mainElement = <TaskDecompositionComponent decompositionData={parsedContent} />;
+            mainElement = (
+              <TaskDecompositionComponent decompositionData={parsedContent} />
+            );
             break;
           case "APIPlannerAgent":
             if (
@@ -959,9 +1151,16 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                 parsedContent.action_input_shortlisting_agent ||
                 parsedContent.action_input_conclude_task)
             ) {
-              mainElement = <ActionStatusDashboard actionData={parsedContent} />;
+              mainElement = (
+                <ActionStatusDashboard actionData={parsedContent} />
+              );
             } else {
-              mainElement = <SingleExpandableContent title={"Code Reflection"} content={parsedContent} />;
+              mainElement = (
+                <SingleExpandableContent
+                  title={"Code Reflection"}
+                  content={parsedContent}
+                />
+              );
             }
             break;
           case "CodeAgent":
@@ -998,15 +1197,21 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                       {isBlocked
                         ? "🛑"
                         : policyType === "playbook"
-                        ? "📖"
-                        : policyType === "tool_guide"
-                        ? "🔧"
-                        : policyType === "tool_approval"
-                        ? "✋"
-                        : "📋"}
+                          ? "📖"
+                          : policyType === "tool_guide"
+                            ? "🔧"
+                            : policyType === "tool_approval"
+                              ? "✋"
+                              : "📋"}
                     </span>
-                    <h3 style={{ margin: 0, color: isBlocked ? "#d32f2f" : "#1976d2" }}>
-                      {isBlocked ? "Policy Blocked" : "Policy Active"}: {policyName}
+                    <h3
+                      style={{
+                        margin: 0,
+                        color: isBlocked ? "#d32f2f" : "#1976d2",
+                      }}
+                    >
+                      {isBlocked ? "Policy Blocked" : "Policy Active"}:{" "}
+                      {policyName}
                     </h3>
                   </div>
                   <div
@@ -1020,7 +1225,13 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                       overflow: "auto",
                     }}
                   >
-                    <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                    <pre
+                      style={{
+                        margin: 0,
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                      }}
+                    >
                       {JSON.stringify(parsedContent, null, 2)}
                     </pre>
                   </div>
@@ -1044,7 +1255,9 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
             // Display reasoning text in a clean format
             if (typeof parsedContent === "string" || parsedContent) {
               const textContent =
-                typeof parsedContent === "string" ? parsedContent : JSON.stringify(parsedContent, null, 2);
+                typeof parsedContent === "string"
+                  ? parsedContent
+                  : JSON.stringify(parsedContent, null, 2);
               mainElement = (
                 <div
                   style={{
@@ -1057,14 +1270,18 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                     border: "1px solid #e2e8f0",
                     fontStyle: "italic",
                   }}
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(marked(textContent) as string) }}
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeHtml(marked(textContent) as string),
+                  }}
                 />
               );
             }
             break;
           case "ShortlisterAgent":
             if (parsedContent) {
-              mainElement = <ShortlisterComponent shortlisterData={parsedContent} />;
+              mainElement = (
+                <ShortlisterComponent shortlisterData={parsedContent} />
+              );
             }
             break;
           case "WaitForResponse":
@@ -1092,47 +1309,74 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
           case "Answer":
           case "FinalAnswerAgent":
             if (parsedContent) {
-              console.log("Answer/FinalAnswerAgent - parsedContent:", parsedContent);
-              
+              console.log(
+                "Answer/FinalAnswerAgent - parsedContent:",
+                parsedContent,
+              );
+
               // Check if data field contains a policy object - if so, extract answer and policies
-              let answerText = parsedContent.final_answer || (typeof parsedContent === "string" ? parsedContent : null);
+              let answerText =
+                parsedContent.final_answer ||
+                (typeof parsedContent === "string" ? parsedContent : null);
               let activePolicies = parsedContent.active_policies || [];
-              
-              if (parsedContent.data && typeof parsedContent.data === "object" && parsedContent.data.type === "policy") {
+
+              if (
+                parsedContent.data &&
+                typeof parsedContent.data === "object" &&
+                parsedContent.data.type === "policy"
+              ) {
                 // Data is a policy object - extract policies and check for answer
                 const policyData = parsedContent.data;
                 activePolicies = [policyData];
-                
+
                 // For playbook, answer comes separately, but for other policies, content might be the answer
                 if (policyData.policy_type !== "playbook" && !answerText) {
-                  answerText = policyData.content || policyData.metadata?.response_content || null;
+                  answerText =
+                    policyData.content ||
+                    policyData.metadata?.response_content ||
+                    null;
                 }
               }
-              
+
               // Find playbook policy if any
-              const playbookPolicy = activePolicies.find((policy: any) => policy.policy_type === "playbook");
-              
+              const playbookPolicy = activePolicies.find(
+                (policy: any) => policy.policy_type === "playbook",
+              );
+
               // Extract playbook guide content
               let playbookGuideContent = "";
               if (playbookPolicy) {
-                playbookGuideContent = playbookPolicy.metadata?.playbook_content 
-                  || playbookPolicy.metadata?.playbook_guidance 
-                  || "";
+                playbookGuideContent =
+                  playbookPolicy.metadata?.playbook_content ||
+                  playbookPolicy.metadata?.playbook_guidance ||
+                  "";
                 if (!playbookGuideContent && playbookPolicy.content) {
                   const content = playbookPolicy.content;
-                  const cleanedContent = content.replace(/^## 📖[^\n]*\n\n?/, "");
+                  const cleanedContent = content.replace(
+                    /^## 📖[^\n]*\n\n?/,
+                    "",
+                  );
                   playbookGuideContent = cleanedContent;
                 }
               }
-              
+
               // For Answer events with playbook policy, ALWAYS look for FinalAnswerAgent step to get the actual final answer
               // The FinalAnswerAgent's final_answer should take precedence over any other answer text
               // IMPORTANT: For playbook policies, the answer should NEVER be the playbook guide content
               if (step.title === "Answer" && playbookPolicy && allSteps) {
-                console.log("Answer - Playbook policy detected, looking for FinalAnswerAgent step in", allSteps.length, "steps");
-                const finalAnswerStep = allSteps.find((s: Step) => s.title === "FinalAnswerAgent");
+                console.log(
+                  "Answer - Playbook policy detected, looking for FinalAnswerAgent step in",
+                  allSteps.length,
+                  "steps",
+                );
+                const finalAnswerStep = allSteps.find(
+                  (s: Step) => s.title === "FinalAnswerAgent",
+                );
                 if (finalAnswerStep) {
-                  console.log("Answer - Found FinalAnswerAgent step:", finalAnswerStep.id);
+                  console.log(
+                    "Answer - Found FinalAnswerAgent step:",
+                    finalAnswerStep.id,
+                  );
                   try {
                     let finalAnswerContent: any;
                     if (typeof finalAnswerStep.content === "string") {
@@ -1140,43 +1384,67 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                     } else {
                       finalAnswerContent = finalAnswerStep.content;
                     }
-                    console.log("Answer - FinalAnswerAgent parsed content:", finalAnswerContent);
-                    const finalAnswerFromAgent = finalAnswerContent.final_answer || null;
+                    console.log(
+                      "Answer - FinalAnswerAgent parsed content:",
+                      finalAnswerContent,
+                    );
+                    const finalAnswerFromAgent =
+                      finalAnswerContent.final_answer || null;
                     if (finalAnswerFromAgent) {
                       // Prioritize FinalAnswerAgent's final_answer over any other answer text
                       answerText = finalAnswerFromAgent;
-                      console.log("Answer - Using FinalAnswerAgent's final_answer:", answerText);
+                      console.log(
+                        "Answer - Using FinalAnswerAgent's final_answer:",
+                        answerText,
+                      );
                     } else {
-                      console.log("Answer - FinalAnswerAgent step found but no final_answer field");
+                      console.log(
+                        "Answer - FinalAnswerAgent step found but no final_answer field",
+                      );
                       // Don't use playbook content as answer - leave answerText as null/empty
                       answerText = null;
                     }
                   } catch (e) {
-                    console.log("Answer - Error parsing FinalAnswerAgent content:", e);
+                    console.log(
+                      "Answer - Error parsing FinalAnswerAgent content:",
+                      e,
+                    );
                     // Don't use playbook content as answer - leave answerText as null/empty
                     answerText = null;
                   }
                 } else {
-                  console.log("Answer - Playbook policy found but no FinalAnswerAgent step available yet");
+                  console.log(
+                    "Answer - Playbook policy found but no FinalAnswerAgent step available yet",
+                  );
                   // Don't use playbook content as answer - leave answerText as null/empty
                   answerText = null;
                 }
               } else if (step.title === "Answer" && playbookPolicy) {
                 // Playbook policy but no allSteps available - don't use playbook content as answer
-                console.log("Answer - Playbook policy found but allSteps not available");
+                console.log(
+                  "Answer - Playbook policy found but allSteps not available",
+                );
                 answerText = null;
               }
 
               console.log("Answer/FinalAnswerAgent - answerText:", answerText);
-              console.log("Answer/FinalAnswerAgent - activePolicies:", activePolicies);
-              console.log("Answer/FinalAnswerAgent - playbookGuideContent:", playbookGuideContent);
+              console.log(
+                "Answer/FinalAnswerAgent - activePolicies:",
+                activePolicies,
+              );
+              console.log(
+                "Answer/FinalAnswerAgent - playbookGuideContent:",
+                playbookGuideContent,
+              );
 
               if (answerText) {
                 let renderedContent: string;
-                
+
                 if (typeof answerText === "string") {
                   // Check if content is in markdown HTML code block (```html ... ```)
-                  const htmlCodeBlockMatch = answerText.match(/^```html\s*\n([\s\S]*?)\n```$/);
+                  const htmlCodeBlockMatch = answerText.match(
+                    /^```html\s*\n([\s\S]*?)\n```$/,
+                  );
                   if (htmlCodeBlockMatch) {
                     // Extract HTML from code block and render as HTML
                     renderedContent = htmlCodeBlockMatch[1];
@@ -1199,14 +1467,26 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                         fontSize: "14px",
                         lineHeight: "1.6",
                         color: "#1e293b",
-                        marginBottom: (playbookGuideContent || activePolicies.length > 0) ? "20px" : "0",
+                        marginBottom:
+                          playbookGuideContent || activePolicies.length > 0
+                            ? "20px"
+                            : "0",
                       }}
-                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(renderedContent) }}
+                      dangerouslySetInnerHTML={{
+                        __html: sanitizeHtml(renderedContent),
+                      }}
+
                     />
-                    
+
                     {/* 2. Playbook guide content (collapsible if available) */}
                     {playbookGuideContent && (
-                      <div style={{ marginTop: "20px", paddingTop: "20px", borderTop: "1px solid #e5e7eb" }}>
+                      <div
+                        style={{
+                          marginTop: "20px",
+                          paddingTop: "20px",
+                          borderTop: "1px solid #e5e7eb",
+                        }}
+                      >
                         <div
                           style={{
                             fontSize: "14px",
@@ -1237,7 +1517,15 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                             }}
                           >
                             <span>Steps:</span>
-                            <span style={{ marginLeft: "auto", fontSize: "11px", color: "#94a3b8" }}>▼ Show steps</span>
+                            <span
+                              style={{
+                                marginLeft: "auto",
+                                fontSize: "11px",
+                                color: "#94a3b8",
+                              }}
+                            >
+                              ▼ Show steps
+                            </span>
                           </summary>
                           <div
                             style={{
@@ -1249,442 +1537,556 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                               borderTop: "1px solid #e5e7eb",
                             }}
                           >
-                            <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(marked(playbookGuideContent) as string) }} />
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: sanitizeHtml(
+                                  marked(playbookGuideContent) as string,
+                                ),
+                              }}
+                            />
                           </div>
                         </details>
                       </div>
                     )}
-                    
+
                     {/* 3. Policy reasoning (all policies including playbook) */}
                     {activePolicies.length > 0 && (
-                      <div style={{ marginTop: "20px", paddingTop: "20px", borderTop: "1px solid #e5e7eb" }}>
+                      <div
+                        style={{
+                          marginTop: "20px",
+                          paddingTop: "20px",
+                          borderTop: "1px solid #e5e7eb",
+                        }}
+                      >
                         {activePolicies.map((policy: any, index: number) => {
-                            const policyMetadata = policy.metadata || {};
-                            const policyReasoning = policyMetadata.policy_reasoning || "";
-                            const policyType = policy.policy_type || "unknown";
-                            const policyName = policy.policy_name || "Unknown Policy";
-                            const isBlocked = policy.policy_blocked || false;
+                          const policyMetadata = policy.metadata || {};
+                          const policyReasoning =
+                            policyMetadata.policy_reasoning || "";
+                          const policyType = policy.policy_type || "unknown";
+                          const policyName =
+                            policy.policy_name || "Unknown Policy";
+                          const isBlocked = policy.policy_blocked || false;
 
-                            if (!policyReasoning) return null;
+                          if (!policyReasoning) return null;
 
-                            // More subtle design for intent_guard policies
-                            const isIntentGuard = policyType === "intent_guard";
-                            
-                            const backgroundColor = isIntentGuard
-                              ? "#f8fafc"
-                              : isBlocked
+                          // More subtle design for intent_guard policies
+                          const isIntentGuard = policyType === "intent_guard";
+
+                          const backgroundColor = isIntentGuard
+                            ? "#f8fafc"
+                            : isBlocked
                               ? "#fef2f2"
                               : policyType === "tool_approval"
-                              ? "#fffbeb"
-                              : policyType === "playbook"
-                              ? "#eff6ff"
-                              : policyType === "tool_guide"
-                              ? "#f0fdf4"
-                              : policyType === "output_formatter"
-                              ? "#fef3f2"
-                              : "#f1f5f9";
+                                ? "#fffbeb"
+                                : policyType === "playbook"
+                                  ? "#eff6ff"
+                                  : policyType === "tool_guide"
+                                    ? "#f0fdf4"
+                                    : policyType === "output_formatter"
+                                      ? "#fef3f2"
+                                      : "#f1f5f9";
 
-                            const borderColor = isIntentGuard
-                              ? "#e2e8f0"
-                              : isBlocked
+                          const borderColor = isIntentGuard
+                            ? "#e2e8f0"
+                            : isBlocked
                               ? "#ef4444"
                               : policyType === "tool_approval"
-                              ? "#f59e0b"
-                              : policyType === "playbook"
-                              ? "#3b82f6"
-                              : policyType === "tool_guide"
-                              ? "#10b981"
-                              : policyType === "output_formatter"
-                              ? "#f97316"
-                              : "#64748b";
+                                ? "#f59e0b"
+                                : policyType === "playbook"
+                                  ? "#3b82f6"
+                                  : policyType === "tool_guide"
+                                    ? "#10b981"
+                                    : policyType === "output_formatter"
+                                      ? "#f97316"
+                                      : "#64748b";
 
-                            const icon = isIntentGuard
-                              ? "ℹ️"
-                              : policyType === "playbook"
+                          const icon = isIntentGuard
+                            ? "ℹ️"
+                            : policyType === "playbook"
                               ? "📖"
                               : policyType === "tool_guide"
-                              ? "🔧"
-                              : policyType === "tool_approval"
-                              ? "✋"
-                              : policyType === "output_formatter"
-                              ? "✨"
-                              : "📋";
+                                ? "🔧"
+                                : policyType === "tool_approval"
+                                  ? "✋"
+                                  : policyType === "output_formatter"
+                                    ? "✨"
+                                    : "📋";
 
-                            return (
+                          return (
+                            <div
+                              key={index}
+                              style={{
+                                marginTop: index > 0 ? "12px" : "0",
+                                padding: isIntentGuard ? "12px 16px" : "16px",
+                                backgroundColor: backgroundColor,
+                                border: isIntentGuard
+                                  ? `1px solid ${borderColor}`
+                                  : `2px solid ${borderColor}`,
+                                borderRadius: "8px",
+                                boxShadow: isIntentGuard
+                                  ? "none"
+                                  : "0 1px 3px rgba(0, 0, 0, 0.1)",
+                              }}
+                            >
                               <div
-                                key={index}
                                 style={{
-                                  marginTop: index > 0 ? "12px" : "0",
-                                  padding: isIntentGuard ? "12px 16px" : "16px",
-                                  backgroundColor: backgroundColor,
-                                  border: isIntentGuard ? `1px solid ${borderColor}` : `2px solid ${borderColor}`,
-                                  borderRadius: "8px",
-                                  boxShadow: isIntentGuard ? "none" : "0 1px 3px rgba(0, 0, 0, 0.1)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "8px",
+                                  marginBottom: isIntentGuard ? "8px" : "12px",
                                 }}
                               >
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                    marginBottom: isIntentGuard ? "8px" : "12px",
-                                  }}
-                                >
-                                  {isBlocked ? (
-                                    <div
-                                      style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: "6px",
-                                        backgroundColor: "#dc2626",
-                                        color: "#ffffff",
-                                        padding: "5px 12px",
-                                        borderRadius: "6px",
-                                        fontSize: "12px",
-                                        fontWeight: 700,
-                                        border: "none",
-                                        boxShadow: "0 1px 2px rgba(220, 38, 38, 0.3)",
-                                        textTransform: "uppercase",
-                                        letterSpacing: "0.5px",
-                                      }}
-                                    >
-                                      <span
-                                        style={{
-                                          width: "8px",
-                                          height: "8px",
-                                          borderRadius: "50%",
-                                          backgroundColor: "#ffffff",
-                                          display: "inline-block",
-                                          boxShadow: "0 0 0 2px #dc2626",
-                                        }}
-                                      />
-                                      Blocked
-                                    </div>
-                                  ) : (
-                                    <span style={{ fontSize: isIntentGuard ? "16px" : "20px", opacity: isIntentGuard ? 0.7 : 1 }}>
-                                      {icon}
-                                    </span>
-                                  )}
-                                  {!isBlocked && (
-                                    <h4
-                                      style={{
-                                        margin: 0,
-                                        fontSize: "14px",
-                                        fontWeight: 600,
-                                        color: isIntentGuard ? "#64748b" : borderColor,
-                                      }}
-                                    >
-                                      {policyName}
-                                    </h4>
-                                  )}
-                                  {isBlocked && (
-                                    <h4
-                                      style={{
-                                        margin: 0,
-                                        fontSize: "14px",
-                                        fontWeight: 600,
-                                        color: "#dc2626",
-                                      }}
-                                    >
-                                      {policyName}
-                                    </h4>
-                                  )}
-                                  <span
+                                {isBlocked ? (
+                                  <div
                                     style={{
-                                      fontSize: "10px",
-                                      color: isIntentGuard ? "#94a3b8" : isBlocked ? "#991b1b" : "#64748b",
-                                      backgroundColor: isIntentGuard ? "#f1f5f9" : isBlocked ? "#fee2e2" : "#e5e7eb",
-                                      padding: "2px 8px",
-                                      borderRadius: "12px",
-                                      textTransform: "capitalize",
-                                      fontWeight: isIntentGuard ? 400 : 500,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "6px",
+                                      backgroundColor: "#dc2626",
+                                      color: "#ffffff",
+                                      padding: "5px 12px",
+                                      borderRadius: "6px",
+                                      fontSize: "12px",
+                                      fontWeight: 700,
+                                      border: "none",
+                                      boxShadow:
+                                        "0 1px 2px rgba(220, 38, 38, 0.3)",
+                                      textTransform: "uppercase",
+                                      letterSpacing: "0.5px",
                                     }}
                                   >
-                                    {policyType.replace("_", " ")}
+                                    <span
+                                      style={{
+                                        width: "8px",
+                                        height: "8px",
+                                        borderRadius: "50%",
+                                        backgroundColor: "#ffffff",
+                                        display: "inline-block",
+                                        boxShadow: "0 0 0 2px #dc2626",
+                                      }}
+                                    />
+                                    Blocked
+                                  </div>
+                                ) : (
+                                  <span
+                                    style={{
+                                      fontSize: isIntentGuard ? "16px" : "20px",
+                                      opacity: isIntentGuard ? 0.7 : 1,
+                                    }}
+                                  >
+                                    {icon}
                                   </span>
-                                </div>
-                                <div
+                                )}
+                                {!isBlocked && (
+                                  <h4
+                                    style={{
+                                      margin: 0,
+                                      fontSize: "14px",
+                                      fontWeight: 600,
+                                      color: isIntentGuard
+                                        ? "#64748b"
+                                        : borderColor,
+                                    }}
+                                  >
+                                    {policyName}
+                                  </h4>
+                                )}
+                                {isBlocked && (
+                                  <h4
+                                    style={{
+                                      margin: 0,
+                                      fontSize: "14px",
+                                      fontWeight: 600,
+                                      color: "#dc2626",
+                                    }}
+                                  >
+                                    {policyName}
+                                  </h4>
+                                )}
+                                <span
                                   style={{
-                                    fontSize: "12px",
-                                    lineHeight: "1.6",
-                                    color: isIntentGuard ? "#64748b" : "#374151",
-                                    padding: isIntentGuard ? "8px 0" : "12px",
-                                    backgroundColor: isIntentGuard ? "transparent" : "#ffffff",
-                                    borderRadius: isIntentGuard ? "0" : "6px",
-                                    border: isIntentGuard ? "none" : "1px solid #e5e7eb",
-                                    fontFamily: "system-ui, -apple-system, sans-serif",
+                                    fontSize: "10px",
+                                    color: isIntentGuard
+                                      ? "#94a3b8"
+                                      : isBlocked
+                                        ? "#991b1b"
+                                        : "#64748b",
+                                    backgroundColor: isIntentGuard
+                                      ? "#f1f5f9"
+                                      : isBlocked
+                                        ? "#fee2e2"
+                                        : "#e5e7eb",
+                                    padding: "2px 8px",
+                                    borderRadius: "12px",
+                                    textTransform: "capitalize",
+                                    fontWeight: isIntentGuard ? 400 : 500,
                                   }}
                                 >
-                                  {!isIntentGuard && (
-                                    <div
-                                      style={{
-                                        fontWeight: 500,
-                                        color: "#6b7280",
-                                        marginBottom: "6px",
-                                        fontSize: "12px",
-                                        textTransform: "uppercase",
-                                        letterSpacing: "0.5px",
-                                      }}
-                                    >
-                                      Policy Reasoning
-                                    </div>
-                                  )}
-                                  <div style={{ color: isIntentGuard ? "#64748b" : "#1f2937", fontStyle: isIntentGuard ? "normal" : "normal" }}>
-                                    {policyReasoning}
+                                  {policyType.replace("_", " ")}
+                                </span>
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: "12px",
+                                  lineHeight: "1.6",
+                                  color: isIntentGuard ? "#64748b" : "#374151",
+                                  padding: isIntentGuard ? "8px 0" : "12px",
+                                  backgroundColor: isIntentGuard
+                                    ? "transparent"
+                                    : "#ffffff",
+                                  borderRadius: isIntentGuard ? "0" : "6px",
+                                  border: isIntentGuard
+                                    ? "none"
+                                    : "1px solid #e5e7eb",
+                                  fontFamily:
+                                    "system-ui, -apple-system, sans-serif",
+                                }}
+                              >
+                                {!isIntentGuard && (
+                                  <div
+                                    style={{
+                                      fontWeight: 500,
+                                      color: "#6b7280",
+                                      marginBottom: "6px",
+                                      fontSize: "12px",
+                                      textTransform: "uppercase",
+                                      letterSpacing: "0.5px",
+                                    }}
+                                  >
+                                    Policy Reasoning
                                   </div>
+                                )}
+                                <div
+                                  style={{
+                                    color: isIntentGuard
+                                      ? "#64748b"
+                                      : "#1f2937",
+                                    fontStyle: isIntentGuard
+                                      ? "normal"
+                                      : "normal",
+                                  }}
+                                >
+                                  {policyReasoning}
                                 </div>
                               </div>
-                            );
-                          })}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              } else if (playbookGuideContent || activePolicies.length > 0) {
+                // No answer text, but we have playbook or policies to show
+                mainElement = (
+                  <div>
+                    {/* Playbook guide content (collapsible if available) */}
+                    {playbookGuideContent && (
+                      <div
+                        style={{
+                          marginBottom:
+                            activePolicies.length > 0 ? "20px" : "0",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "14px",
+                            fontWeight: 600,
+                            color: "#0ea5e9",
+                            marginBottom: "12px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <span style={{ fontSize: "18px" }}>📖</span>
+                          <span>Task Guide</span>
                         </div>
-                      )}
-                    </div>
-                  );
-                } else if (playbookGuideContent || activePolicies.length > 0) {
-                  // No answer text, but we have playbook or policies to show
-                  mainElement = (
-                    <div>
-                      {/* Playbook guide content (collapsible if available) */}
-                      {playbookGuideContent && (
-                        <div style={{ marginBottom: activePolicies.length > 0 ? "20px" : "0" }}>
+                        <details style={{ position: "relative" }}>
+                          <summary
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "13px",
+                              fontWeight: 500,
+                              color: "#64748b",
+                              padding: "6px 0",
+                              userSelect: "none",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              listStyle: "none",
+                            }}
+                          >
+                            <span>Steps:</span>
+                            <span
+                              style={{
+                                marginLeft: "auto",
+                                fontSize: "11px",
+                                color: "#94a3b8",
+                              }}
+                            >
+                              ▼ Show steps
+                            </span>
+                          </summary>
                           <div
                             style={{
                               fontSize: "14px",
-                              fontWeight: 600,
-                              color: "#0ea5e9",
-                              marginBottom: "12px",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "8px",
+                              lineHeight: "1.6",
+                              color: "#1e293b",
+                              marginTop: "12px",
+                              paddingTop: "12px",
+                              borderTop: "1px solid #e5e7eb",
                             }}
                           >
-                            <span style={{ fontSize: "18px" }}>📖</span>
-                            <span>Task Guide</span>
-                          </div>
-                          <details style={{ position: "relative" }}>
-                            <summary
-                              style={{
-                                cursor: "pointer",
-                                fontSize: "13px",
-                                fontWeight: 500,
-                                color: "#64748b",
-                                padding: "6px 0",
-                                userSelect: "none",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "6px",
-                                listStyle: "none",
-                              }}
-                            >
-                              <span>Steps:</span>
-                              <span style={{ marginLeft: "auto", fontSize: "11px", color: "#94a3b8" }}>▼ Show steps</span>
-                            </summary>
                             <div
-                              style={{
-                                fontSize: "14px",
-                                lineHeight: "1.6",
-                                color: "#1e293b",
-                                marginTop: "12px",
-                                paddingTop: "12px",
-                                borderTop: "1px solid #e5e7eb",
+                              dangerouslySetInnerHTML={{
+                                __html: sanitizeHtml(
+                                  marked(playbookGuideContent) as string,
+                                ),
                               }}
-                            >
-                              <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(marked(playbookGuideContent) as string) }} />
-                            </div>
-                          </details>
-                        </div>
-                      )}
-                      
-                      {/* Policy reasoning (all policies including playbook) */}
-                      {activePolicies.length > 0 && (
-                        <div style={{ marginTop: playbookGuideContent ? "20px" : "0", paddingTop: playbookGuideContent ? "20px" : "0", borderTop: playbookGuideContent ? "1px solid #e5e7eb" : "none" }}>
-                          {activePolicies.map((policy: any, index: number) => {
-                            const policyMetadata = policy.metadata || {};
-                            const policyReasoning = policyMetadata.policy_reasoning || "";
-                            const policyType = policy.policy_type || "unknown";
-                            const policyName = policy.policy_name || "Unknown Policy";
-                            const isBlocked = policy.policy_blocked || false;
+                            />
+                          </div>
+                        </details>
+                      </div>
+                    )}
 
-                            if (!policyReasoning) return null;
+                    {/* Policy reasoning (all policies including playbook) */}
+                    {activePolicies.length > 0 && (
+                      <div
+                        style={{
+                          marginTop: playbookGuideContent ? "20px" : "0",
+                          paddingTop: playbookGuideContent ? "20px" : "0",
+                          borderTop: playbookGuideContent
+                            ? "1px solid #e5e7eb"
+                            : "none",
+                        }}
+                      >
+                        {activePolicies.map((policy: any, index: number) => {
+                          const policyMetadata = policy.metadata || {};
+                          const policyReasoning =
+                            policyMetadata.policy_reasoning || "";
+                          const policyType = policy.policy_type || "unknown";
+                          const policyName =
+                            policy.policy_name || "Unknown Policy";
+                          const isBlocked = policy.policy_blocked || false;
 
-                            const isIntentGuard = policyType === "intent_guard";
-                            
-                            const backgroundColor = isIntentGuard
-                              ? "#f8fafc"
-                              : isBlocked
+                          if (!policyReasoning) return null;
+
+                          const isIntentGuard = policyType === "intent_guard";
+
+                          const backgroundColor = isIntentGuard
+                            ? "#f8fafc"
+                            : isBlocked
                               ? "#fef2f2"
                               : policyType === "tool_approval"
-                              ? "#fffbeb"
-                              : policyType === "playbook"
-                              ? "#eff6ff"
-                              : policyType === "tool_guide"
-                              ? "#f0fdf4"
-                              : policyType === "output_formatter"
-                              ? "#fef3f2"
-                              : "#f1f5f9";
+                                ? "#fffbeb"
+                                : policyType === "playbook"
+                                  ? "#eff6ff"
+                                  : policyType === "tool_guide"
+                                    ? "#f0fdf4"
+                                    : policyType === "output_formatter"
+                                      ? "#fef3f2"
+                                      : "#f1f5f9";
 
-                            const borderColor = isIntentGuard
-                              ? "#e2e8f0"
-                              : isBlocked
+                          const borderColor = isIntentGuard
+                            ? "#e2e8f0"
+                            : isBlocked
                               ? "#ef4444"
                               : policyType === "tool_approval"
-                              ? "#f59e0b"
-                              : policyType === "playbook"
-                              ? "#3b82f6"
-                              : policyType === "tool_guide"
-                              ? "#10b981"
-                              : policyType === "output_formatter"
-                              ? "#f97316"
-                              : "#64748b";
+                                ? "#f59e0b"
+                                : policyType === "playbook"
+                                  ? "#3b82f6"
+                                  : policyType === "tool_guide"
+                                    ? "#10b981"
+                                    : policyType === "output_formatter"
+                                      ? "#f97316"
+                                      : "#64748b";
 
-                            const icon = isIntentGuard
-                              ? "ℹ️"
-                              : policyType === "playbook"
+                          const icon = isIntentGuard
+                            ? "ℹ️"
+                            : policyType === "playbook"
                               ? "📖"
                               : policyType === "tool_guide"
-                              ? "🔧"
-                              : policyType === "tool_approval"
-                              ? "✋"
-                              : policyType === "output_formatter"
-                              ? "✨"
-                              : "📋";
+                                ? "🔧"
+                                : policyType === "tool_approval"
+                                  ? "✋"
+                                  : policyType === "output_formatter"
+                                    ? "✨"
+                                    : "📋";
 
-                            return (
+                          return (
+                            <div
+                              key={index}
+                              style={{
+                                marginTop: index > 0 ? "12px" : "0",
+                                padding: isIntentGuard ? "12px 16px" : "16px",
+                                backgroundColor: backgroundColor,
+                                border: isIntentGuard
+                                  ? `1px solid ${borderColor}`
+                                  : `2px solid ${borderColor}`,
+                                borderRadius: "8px",
+                                boxShadow: isIntentGuard
+                                  ? "none"
+                                  : "0 1px 3px rgba(0, 0, 0, 0.1)",
+                              }}
+                            >
                               <div
-                                key={index}
                                 style={{
-                                  marginTop: index > 0 ? "12px" : "0",
-                                  padding: isIntentGuard ? "12px 16px" : "16px",
-                                  backgroundColor: backgroundColor,
-                                  border: isIntentGuard ? `1px solid ${borderColor}` : `2px solid ${borderColor}`,
-                                  borderRadius: "8px",
-                                  boxShadow: isIntentGuard ? "none" : "0 1px 3px rgba(0, 0, 0, 0.1)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "8px",
+                                  marginBottom: isIntentGuard ? "8px" : "12px",
                                 }}
                               >
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                    marginBottom: isIntentGuard ? "8px" : "12px",
-                                  }}
-                                >
-                                  {isBlocked ? (
-                                    <div
-                                      style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: "6px",
-                                        backgroundColor: "#dc2626",
-                                        color: "#ffffff",
-                                        padding: "5px 12px",
-                                        borderRadius: "6px",
-                                        fontSize: "12px",
-                                        fontWeight: 700,
-                                        border: "none",
-                                        boxShadow: "0 1px 2px rgba(220, 38, 38, 0.3)",
-                                        textTransform: "uppercase",
-                                        letterSpacing: "0.5px",
-                                      }}
-                                    >
-                                      <span
-                                        style={{
-                                          width: "8px",
-                                          height: "8px",
-                                          borderRadius: "50%",
-                                          backgroundColor: "#ffffff",
-                                          display: "inline-block",
-                                          boxShadow: "0 0 0 2px #dc2626",
-                                        }}
-                                      />
-                                      Blocked
-                                    </div>
-                                  ) : (
-                                    <span style={{ fontSize: isIntentGuard ? "16px" : "20px", opacity: isIntentGuard ? 0.7 : 1 }}>
-                                      {icon}
-                                    </span>
-                                  )}
-                                  {!isBlocked && (
-                                    <h4
-                                      style={{
-                                        margin: 0,
-                                        fontSize: "14px",
-                                        fontWeight: 600,
-                                        color: isIntentGuard ? "#64748b" : borderColor,
-                                      }}
-                                    >
-                                      {policyName}
-                                    </h4>
-                                  )}
-                                  {isBlocked && (
-                                    <h4
-                                      style={{
-                                        margin: 0,
-                                        fontSize: "14px",
-                                        fontWeight: 600,
-                                        color: "#dc2626",
-                                      }}
-                                    >
-                                      {policyName}
-                                    </h4>
-                                  )}
-                                  <span
+                                {isBlocked ? (
+                                  <div
                                     style={{
-                                      fontSize: "10px",
-                                      color: isIntentGuard ? "#94a3b8" : isBlocked ? "#991b1b" : "#64748b",
-                                      backgroundColor: isIntentGuard ? "#f1f5f9" : isBlocked ? "#fee2e2" : "#e5e7eb",
-                                      padding: "2px 8px",
-                                      borderRadius: "12px",
-                                      textTransform: "capitalize",
-                                      fontWeight: isIntentGuard ? 400 : 500,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "6px",
+                                      backgroundColor: "#dc2626",
+                                      color: "#ffffff",
+                                      padding: "5px 12px",
+                                      borderRadius: "6px",
+                                      fontSize: "12px",
+                                      fontWeight: 700,
+                                      border: "none",
+                                      boxShadow:
+                                        "0 1px 2px rgba(220, 38, 38, 0.3)",
+                                      textTransform: "uppercase",
+                                      letterSpacing: "0.5px",
                                     }}
                                   >
-                                    {policyType.replace("_", " ")}
+                                    <span
+                                      style={{
+                                        width: "8px",
+                                        height: "8px",
+                                        borderRadius: "50%",
+                                        backgroundColor: "#ffffff",
+                                        display: "inline-block",
+                                        boxShadow: "0 0 0 2px #dc2626",
+                                      }}
+                                    />
+                                    Blocked
+                                  </div>
+                                ) : (
+                                  <span
+                                    style={{
+                                      fontSize: isIntentGuard ? "16px" : "20px",
+                                      opacity: isIntentGuard ? 0.7 : 1,
+                                    }}
+                                  >
+                                    {icon}
                                   </span>
-                                </div>
-                                <div
+                                )}
+                                {!isBlocked && (
+                                  <h4
+                                    style={{
+                                      margin: 0,
+                                      fontSize: "14px",
+                                      fontWeight: 600,
+                                      color: isIntentGuard
+                                        ? "#64748b"
+                                        : borderColor,
+                                    }}
+                                  >
+                                    {policyName}
+                                  </h4>
+                                )}
+                                {isBlocked && (
+                                  <h4
+                                    style={{
+                                      margin: 0,
+                                      fontSize: "14px",
+                                      fontWeight: 600,
+                                      color: "#dc2626",
+                                    }}
+                                  >
+                                    {policyName}
+                                  </h4>
+                                )}
+                                <span
                                   style={{
-                                    fontSize: "12px",
-                                    lineHeight: "1.6",
-                                    color: isIntentGuard ? "#64748b" : "#374151",
-                                    padding: isIntentGuard ? "8px 0" : "12px",
-                                    backgroundColor: isIntentGuard ? "transparent" : "#ffffff",
-                                    borderRadius: isIntentGuard ? "0" : "6px",
-                                    border: isIntentGuard ? "none" : "1px solid #e5e7eb",
-                                    fontFamily: "system-ui, -apple-system, sans-serif",
+                                    fontSize: "10px",
+                                    color: isIntentGuard
+                                      ? "#94a3b8"
+                                      : isBlocked
+                                        ? "#991b1b"
+                                        : "#64748b",
+                                    backgroundColor: isIntentGuard
+                                      ? "#f1f5f9"
+                                      : isBlocked
+                                        ? "#fee2e2"
+                                        : "#e5e7eb",
+                                    padding: "2px 8px",
+                                    borderRadius: "12px",
+                                    textTransform: "capitalize",
+                                    fontWeight: isIntentGuard ? 400 : 500,
                                   }}
                                 >
-                                  {!isIntentGuard && (
-                                    <div
-                                      style={{
-                                        fontWeight: 500,
-                                        color: "#6b7280",
-                                        marginBottom: "6px",
-                                        fontSize: "12px",
-                                        textTransform: "uppercase",
-                                        letterSpacing: "0.5px",
-                                      }}
-                                    >
-                                      Policy Reasoning
-                                    </div>
-                                  )}
-                                  <div style={{ color: isIntentGuard ? "#64748b" : "#1f2937", fontStyle: isIntentGuard ? "normal" : "normal" }}>
-                                    {policyReasoning}
+                                  {policyType.replace("_", " ")}
+                                </span>
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: "12px",
+                                  lineHeight: "1.6",
+                                  color: isIntentGuard ? "#64748b" : "#374151",
+                                  padding: isIntentGuard ? "8px 0" : "12px",
+                                  backgroundColor: isIntentGuard
+                                    ? "transparent"
+                                    : "#ffffff",
+                                  borderRadius: isIntentGuard ? "0" : "6px",
+                                  border: isIntentGuard
+                                    ? "none"
+                                    : "1px solid #e5e7eb",
+                                  fontFamily:
+                                    "system-ui, -apple-system, sans-serif",
+                                }}
+                              >
+                                {!isIntentGuard && (
+                                  <div
+                                    style={{
+                                      fontWeight: 500,
+                                      color: "#6b7280",
+                                      marginBottom: "6px",
+                                      fontSize: "12px",
+                                      textTransform: "uppercase",
+                                      letterSpacing: "0.5px",
+                                    }}
+                                  >
+                                    Policy Reasoning
                                   </div>
+                                )}
+                                <div
+                                  style={{
+                                    color: isIntentGuard
+                                      ? "#64748b"
+                                      : "#1f2937",
+                                    fontStyle: isIntentGuard
+                                      ? "normal"
+                                      : "normal",
+                                  }}
+                                >
+                                  {policyReasoning}
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
             }
             break;
           case "SuggestHumanActions":
             if (parsedContent && parsedContent.action_id) {
-              console.log("[SuggestHumanActions] Rendering FollowupAction with:", parsedContent);
+              console.log(
+                "[SuggestHumanActions] Rendering FollowupAction with:",
+                parsedContent,
+              );
               mainElement = (
                 <FollowupAction
                   followupAction={parsedContent}
@@ -1693,12 +2095,21 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                     console.log("📤 Using threadId:", threadId);
                     // Mark this step as completed before proceeding
                     markStepCompleted(step.id);
-                    await fetchStreamingData(chatInstance, "", d, threadId, useDraftAgent);
+                    await fetchStreamingData(
+                      chatInstance,
+                      "",
+                      d,
+                      threadId,
+                      useDraftAgent,
+                    );
                   }}
                 />
               );
             } else {
-              console.error("[SuggestHumanActions] Invalid parsedContent:", parsedContent);
+              console.error(
+                "[SuggestHumanActions] Invalid parsedContent:",
+                parsedContent,
+              );
               mainElement = (
                 <div className="text-red-500 p-4 border border-red-300 rounded">
                   Error: Invalid action data received
@@ -1709,7 +2120,8 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
           default:
             const isJSONLike =
               parsedContent !== null &&
-              (typeof parsedContent === "object" || Array.isArray(parsedContent)) &&
+              (typeof parsedContent === "object" ||
+                Array.isArray(parsedContent)) &&
               !(parsedContent instanceof Date) &&
               !(parsedContent instanceof RegExp);
             if (isJSONLike) {
@@ -1719,7 +2131,12 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
             if (!parsedContent) {
               parsedContent = "";
             }
-            mainElement = <SingleExpandableContent title={step.title} content={parsedContent} />;
+            mainElement = (
+              <SingleExpandableContent
+                title={step.title}
+                content={parsedContent}
+              />
+            );
         }
 
         // Add main element to outputElements if it exists
@@ -1733,16 +2150,21 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
         return null;
       }
     },
-    [chatInstance, markStepCompleted, currentSteps]
+    [chatInstance, markStepCompleted, currentSteps],
   );
 
   // Memoized button click handler
   const handleToggleDetails = useCallback(
     (stepId: string) => {
-      console.log("Button clicked for step:", stepId, "Current state:", showDetails[stepId]);
+      console.log(
+        "Button clicked for step:",
+        stepId,
+        "Current state:",
+        showDetails[stepId],
+      );
       setShowDetails((prev) => ({ ...prev, [stepId]: !prev[stepId] }));
     },
-    [showDetails]
+    [showDetails],
   );
 
   // Handle reasoning collapse toggle
@@ -1753,7 +2175,9 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
   const mapStepTitle = (stepTitle: string, parsedContent?: any) => {
     // Handle CodeAgent dynamically based on execution output
     if (stepTitle === "CodeAgent" && parsedContent) {
-      const hasExecutionOutput = parsedContent.execution_output && parsedContent.execution_output.trim().length > 0;
+      const hasExecutionOutput =
+        parsedContent.execution_output &&
+        parsedContent.execution_output.trim().length > 0;
       return hasExecutionOutput ? "Executed Code" : "Generated Code";
     }
 
@@ -1779,7 +2203,12 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
     return (titleMap as any)[stepTitle] || stepTitle;
   };
 
-  console.log("CardManager render - currentSteps:", currentSteps.length, "isProcessingComplete:", isProcessingComplete);
+  console.log(
+    "CardManager render - currentSteps:",
+    currentSteps.length,
+    "isProcessingComplete:",
+    isProcessingComplete,
+  );
 
   // Check if there's an error step
   const hasErrorStep = currentSteps.some((step) => step.title === "Error");
@@ -1792,7 +2221,8 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
 
   // Show SuggestHumanActions as active if it's not marked as completed
   const userActionSteps = currentSteps.filter((step) => {
-    const isUserAction = step.title === "SuggestHumanActions" && !step.completed;
+    const isUserAction =
+      step.title === "SuggestHumanActions" && !step.completed;
     return isUserAction && shouldRenderStep(step);
   });
 
@@ -1810,7 +2240,11 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
   // Get current step to display (before final answer or user action)
   const currentStep = currentSteps[currentStepIndex];
   const isShowingCurrentStep =
-    !isStopped && viewMode === "inplace" && !hasFinalAnswer && userActionSteps.length === 0 && currentStep;
+    !isStopped &&
+    viewMode === "inplace" &&
+    !hasFinalAnswer &&
+    userActionSteps.length === 0 &&
+    currentStep;
   const isLoading =
     !isStopped &&
     currentSteps.length > 0 &&
@@ -1828,26 +2262,37 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
         try {
           parsedContent = JSON.parse(step.content);
           const keys = Object.keys(parsedContent);
-          
+
           // Check if we have variables in the parsed content (matching renderStepContent logic)
           if (parsedContent.data !== undefined && parsedContent.variables) {
             // Parse data if it's a JSON string
             let dataValue = parsedContent.data;
             let extractedPolicies: any[] = parsedContent.active_policies || [];
-            
+
             if (typeof dataValue === "string") {
               try {
                 const parsedData = JSON.parse(dataValue);
                 // Check if the parsed data is a policy object
-                if (parsedData && typeof parsedData === "object" && parsedData.type === "policy") {
+                if (
+                  parsedData &&
+                  typeof parsedData === "object" &&
+                  parsedData.type === "policy"
+                ) {
                   extractedPolicies = [parsedData];
                   // Use the content as final_answer if it's a policy
-                  dataValue = parsedData.content || parsedData.response_content || dataValue;
+                  dataValue =
+                    parsedData.content ||
+                    parsedData.response_content ||
+                    dataValue;
                 }
               } catch (e) {
                 // Not JSON, keep as string
               }
-            } else if (dataValue && typeof dataValue === "object" && dataValue.type === "policy") {
+            } else if (
+              dataValue &&
+              typeof dataValue === "object" &&
+              dataValue.type === "policy"
+            ) {
               // Data is already a policy object
               extractedPolicies = [dataValue];
               dataValue = dataValue.content || dataValue.response_content || "";
@@ -1860,7 +2305,10 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                 variables: parsedContent.variables,
                 active_policies: extractedPolicies,
               };
-            } else if (typeof parsedContent.data === "object" && !Array.isArray(parsedContent.data)) {
+            } else if (
+              typeof parsedContent.data === "object" &&
+              !Array.isArray(parsedContent.data)
+            ) {
               // Keep both data and variables if data is an object
               parsedContent = {
                 ...parsedContent.data,
@@ -1879,14 +2327,19 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
             // Only data, no variables - check if data is a policy JSON string
             let dataValue = parsedContent.data;
             let extractedPolicies: any[] = [];
-            
+
             if (typeof dataValue === "string") {
               try {
                 const parsedData = JSON.parse(dataValue);
-                if (parsedData && typeof parsedData === "object" && parsedData.type === "policy") {
+                if (
+                  parsedData &&
+                  typeof parsedData === "object" &&
+                  parsedData.type === "policy"
+                ) {
                   extractedPolicies = [parsedData];
                   parsedContent = {
-                    final_answer: parsedData.content || parsedData.response_content || "",
+                    final_answer:
+                      parsedData.content || parsedData.response_content || "",
                     active_policies: extractedPolicies,
                   };
                 } else {
@@ -1895,10 +2348,15 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
               } catch (e) {
                 parsedContent = dataValue;
               }
-            } else if (dataValue && typeof dataValue === "object" && dataValue.type === "policy") {
+            } else if (
+              dataValue &&
+              typeof dataValue === "object" &&
+              dataValue.type === "policy"
+            ) {
               extractedPolicies = [dataValue];
               parsedContent = {
-                final_answer: dataValue.content || dataValue.response_content || "",
+                final_answer:
+                  dataValue.content || dataValue.response_content || "",
                 active_policies: extractedPolicies,
               };
             } else {
@@ -1932,7 +2390,9 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
     }
 
     // Only render component content if details are shown
-    const componentContent = showDetails[step.id] ? renderStepContent(step, currentSteps) : null;
+    const componentContent = showDetails[step.id]
+      ? renderStepContent(step, currentSteps)
+      : null;
 
     return (
       <div
@@ -1994,7 +2454,11 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
             {React.isValidElement(description) ? (
               description
             ) : (
-              <span dangerouslySetInnerHTML={{ __html: sanitizeHtml(description as string) }} />
+              <span
+                dangerouslySetInnerHTML={{
+                  __html: sanitizeHtml(description as string),
+                }}
+              />
             )}
           </div>
         </div>
@@ -2021,16 +2485,20 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
             cursor: "pointer",
           }}
           onMouseOver={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#f8fafc";
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+              "#f8fafc";
           }}
           onMouseOut={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent";
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+              "transparent";
           }}
         >
           <span
             style={{
               display: "inline-block",
-              transform: showDetails[step.id] ? "rotate(180deg)" : "rotate(0deg)",
+              transform: showDetails[step.id]
+                ? "rotate(180deg)"
+                : "rotate(0deg)",
               transition: "transform 0.2s ease",
               fontSize: "12px",
             }}
@@ -2054,277 +2522,160 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
         }
       `}</style>
       <div className="components-container" ref={cardRef}>
-      {/* View mode toggle */}
-      {!isStopped && (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ fontSize: "11px", color: "#64748b" }}>View:</span>
-            <button
-              onClick={() => setViewMode("inplace")}
-              style={{
-                padding: "2px 6px",
-                backgroundColor: viewMode === "inplace" ? "#2563eb" : "transparent",
-                color: viewMode === "inplace" ? "#ffffff" : "#64748b",
-                border: "1px solid #e5e7eb",
-                borderRadius: "3px",
-                fontSize: "10px",
-                fontWeight: 500,
-                cursor: "pointer",
-              }}
-            >
-              In-place
-            </button>
-            <button
-              onClick={() => setViewMode("append")}
-              style={{
-                padding: "2px 6px",
-                backgroundColor: viewMode === "append" ? "#2563eb" : "transparent",
-                color: viewMode === "append" ? "#ffffff" : "#64748b",
-                border: "1px solid #e5e7eb",
-                borderRadius: "3px",
-                fontSize: "10px",
-                fontWeight: 500,
-                cursor: "pointer",
-              }}
-            >
-              Append
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Append mode */}
-      {!isStopped &&
-        viewMode === "append" &&
-        currentSteps.length > 0 &&
-        (hasFinalAnswer ? (
-          <div>
-            {/* Collapsed Reasoning wrapper with prior steps */}
-            {reasoningSteps.length > 0 && (
-              <div
-                style={{
-                  marginBottom: "16px",
-                  padding: "12px",
-                  backgroundColor: "#f8fafc",
-                  borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
-                  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    cursor: "pointer",
-                    userSelect: "none",
-                  }}
-                  onClick={handleToggleReasoning}
-                >
-                  <h3
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#374151",
-                      margin: "0",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        transform: isReasoningCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
-                        transition: "transform 0.3s ease",
-                        fontSize: "14px",
-                      }}
-                    >
-                      ▼
-                    </span>
-                    Reasoning Process
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: "400",
-                        color: "#6b7280",
-                        backgroundColor: "#e5e7eb",
-                        padding: "2px 8px",
-                        borderRadius: "12px",
-                      }}
-                    >
-                      {reasoningSteps.length} steps
-                    </span>
-                  </h3>
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      color: "#6b7280",
-                      fontStyle: "italic",
-                    }}
-                  >
-                    {isReasoningCollapsed ? "Click to expand" : "Click to collapse"}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    maxHeight: isReasoningCollapsed ? "0" : "10000px",
-                    overflow: "hidden",
-                    transition: "max-height 0.5s ease-in-out, opacity 0.3s ease-in-out",
-                    opacity: isReasoningCollapsed ? 0 : 1,
-                  }}
-                >
-                  <div style={{ marginTop: "12px" }}>{reasoningSteps.map((step) => renderStepCard(step, false))}</div>
-                </div>
-              </div>
-            )}
-
-            {/* Final Answer card(s) */}
-            {finalAnswerSteps.map((step) => renderStepCard(step, false))}
-          </div>
-        ) : (
-          <div>
-            {currentSteps.map((step) => (
-              <div key={step.id}>{renderStepCard(step, false)}</div>
-            ))}
-          </div>
-        ))}
-      {/* When stopped, show a collapsed Reasoning section containing all steps */}
-      {isStopped && currentSteps.length > 0 && (
-        <div
-          style={{
-            marginBottom: "16px",
-            padding: "12px",
-            backgroundColor: "#f8fafc",
-            borderRadius: "8px",
-            border: "1px solid #e2e8f0",
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
-          }}
-        >
+        {/* View mode toggle */}
+        {!isStopped && (
           <div
             style={{
               display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              cursor: "pointer",
-              userSelect: "none",
+              justifyContent: "flex-end",
+              marginBottom: "6px",
             }}
-            onClick={handleToggleReasoning}
           >
-            <h3
-              style={{
-                fontSize: "16px",
-                fontWeight: "600",
-                color: "#374151",
-                margin: "0",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
-            >
-              <span
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "11px", color: "#64748b" }}>View:</span>
+              <button
+                onClick={() => setViewMode("inplace")}
                 style={{
-                  transform: isReasoningCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
-                  transition: "transform 0.3s ease",
-                  fontSize: "14px",
+                  padding: "2px 6px",
+                  backgroundColor:
+                    viewMode === "inplace" ? "#2563eb" : "transparent",
+                  color: viewMode === "inplace" ? "#ffffff" : "#64748b",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "3px",
+                  fontSize: "10px",
+                  fontWeight: 500,
+                  cursor: "pointer",
                 }}
               >
-                ▼
-              </span>
-              Reasoning Process
-              <span
+                In-place
+              </button>
+              <button
+                onClick={() => setViewMode("append")}
                 style={{
-                  fontSize: "12px",
-                  fontWeight: "400",
-                  color: "#6b7280",
-                  backgroundColor: "#e5e7eb",
-                  padding: "2px 8px",
-                  borderRadius: "12px",
+                  padding: "2px 6px",
+                  backgroundColor:
+                    viewMode === "append" ? "#2563eb" : "transparent",
+                  color: viewMode === "append" ? "#ffffff" : "#64748b",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "3px",
+                  fontSize: "10px",
+                  fontWeight: 500,
+                  cursor: "pointer",
                 }}
               >
-                {currentSteps.length} steps
-              </span>
-            </h3>
-            <div
-              style={{
-                fontSize: "12px",
-                color: "#6b7280",
-                fontStyle: "italic",
-              }}
-            >
-              {isReasoningCollapsed ? "Click to expand" : "Click to collapse"}
+                Append
+              </button>
             </div>
           </div>
+        )}
 
-          <div
-            style={{
-              maxHeight: isReasoningCollapsed ? "0" : "10000px",
-              overflow: "hidden",
-              transition: "max-height 0.5s ease-in-out, opacity 0.3s ease-in-out",
-              opacity: isReasoningCollapsed ? 0 : 1,
-            }}
-          >
-            <div style={{ marginTop: "12px" }}>{currentSteps.map((step) => renderStepCard(step, false))}</div>
-          </div>
-        </div>
-      )}
-
-      {/* Final outside card indicating interruption */}
-      {isStopped && (
-        <div style={{ marginTop: "8px" }}>
-          <div
-            style={{
-              marginBottom: "16px",
-              padding: "12px",
-              backgroundColor: "#ffffff",
-              borderRadius: "6px",
-              border: "1px solid #e2e8f0",
-              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
-            }}
-          >
-            <div
-              style={{
-                marginBottom: "12px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "500",
-                  color: "#475569",
-                  margin: "0",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                Task Interrupted
-              </h3>
-            </div>
+        {/* Append mode */}
+        {!isStopped &&
+          viewMode === "append" &&
+          currentSteps.length > 0 &&
+          (hasFinalAnswer ? (
             <div>
-              <p
-                style={{
-                  margin: "0",
-                  fontSize: "13px",
-                  color: "#64748b",
-                  lineHeight: "1.4",
-                }}
-              >
-                The task was stopped by the user.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+              {/* Collapsed Reasoning wrapper with prior steps */}
+              {reasoningSteps.length > 0 && (
+                <div
+                  style={{
+                    marginBottom: "16px",
+                    padding: "12px",
+                    backgroundColor: "#f8fafc",
+                    borderRadius: "8px",
+                    border: "1px solid #e2e8f0",
+                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      cursor: "pointer",
+                      userSelect: "none",
+                    }}
+                    onClick={handleToggleReasoning}
+                  >
+                    <h3
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#374151",
+                        margin: "0",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          transform: isReasoningCollapsed
+                            ? "rotate(-90deg)"
+                            : "rotate(0deg)",
+                          transition: "transform 0.3s ease",
+                          fontSize: "14px",
+                        }}
+                      >
+                        ▼
+                      </span>
+                      Reasoning Process
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: "400",
+                          color: "#6b7280",
+                          backgroundColor: "#e5e7eb",
+                          padding: "2px 8px",
+                          borderRadius: "12px",
+                        }}
+                      >
+                        {reasoningSteps.length} steps
+                      </span>
+                    </h3>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#6b7280",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      {isReasoningCollapsed
+                        ? "Click to expand"
+                        : "Click to collapse"}
+                    </div>
+                  </div>
 
-      {/* Reasoning Section - Collapsible when final answer or user action is present */}
-      {!isStopped &&
-        viewMode === "inplace" &&
-        (hasFinalAnswer || userActionSteps.length > 0) &&
-        reasoningSteps.length > 0 && (
+                  <div
+                    style={{
+                      maxHeight: isReasoningCollapsed ? "0" : "10000px",
+                      overflow: "hidden",
+                      transition:
+                        "max-height 0.5s ease-in-out, opacity 0.3s ease-in-out",
+                      opacity: isReasoningCollapsed ? 0 : 1,
+                    }}
+                  >
+                    <div style={{ marginTop: "12px" }}>
+                      {reasoningSteps.map((step) =>
+                        renderStepCard(step, false),
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Final Answer card(s) */}
+              {finalAnswerSteps.map((step) => renderStepCard(step, false))}
+            </div>
+          ) : (
+            <div>
+              {currentSteps.map((step) => (
+                <div key={step.id}>{renderStepCard(step, false)}</div>
+              ))}
+            </div>
+          ))}
+        {/* When stopped, show a collapsed Reasoning section containing all steps */}
+        {isStopped && currentSteps.length > 0 && (
           <div
             style={{
               marginBottom: "16px",
@@ -2358,7 +2709,9 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
               >
                 <span
                   style={{
-                    transform: isReasoningCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                    transform: isReasoningCollapsed
+                      ? "rotate(-90deg)"
+                      : "rotate(0deg)",
                     transition: "transform 0.3s ease",
                     fontSize: "14px",
                   }}
@@ -2376,7 +2729,7 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
                     borderRadius: "12px",
                   }}
                 >
-                  {reasoningSteps.length} steps
+                  {currentSteps.length} steps
                 </span>
               </h3>
               <div
@@ -2394,92 +2747,241 @@ const CardManager: React.FC<CardManagerProps> = ({ chatInstance, threadId, useDr
               style={{
                 maxHeight: isReasoningCollapsed ? "0" : "10000px",
                 overflow: "hidden",
-                transition: "max-height 0.5s ease-in-out, opacity 0.3s ease-in-out",
+                transition:
+                  "max-height 0.5s ease-in-out, opacity 0.3s ease-in-out",
                 opacity: isReasoningCollapsed ? 0 : 1,
               }}
             >
-              <div style={{ marginTop: "12px" }}>{reasoningSteps.map((step) => renderStepCard(step, false))}</div>
+              <div style={{ marginTop: "12px" }}>
+                {currentSteps.map((step) => renderStepCard(step, false))}
+              </div>
             </div>
           </div>
         )}
 
-      {/* Current Step Display - Shows one step at a time with smooth transitions */}
-      {!isStopped && viewMode === "inplace" && isShowingCurrentStep && (
-        <div
-          className={`current-step-container ${isLoading ? "loading-border" : ""}`}
-          style={{
-            position: "relative",
-            minHeight: "200px",
-          }}
-        >
-          {renderStepCard(currentStep, true)}
-        </div>
-      )}
-
-      {/* Final Answer Steps - Always visible (in-place mode) */}
-      {!isStopped && viewMode === "inplace" && finalAnswerSteps.map((step) => renderStepCard(step, false))}
-
-      {/* User Action Steps - Always visible when present (in-place mode) */}
-      {!isStopped && viewMode === "inplace" && userActionSteps.map((step) => renderStepCard(step, false))}
-
-      {/* Loading indicator - Only show when processing and no current step */}
-      {!isStopped &&
-        viewMode === "inplace" &&
-        currentSteps.length > 0 &&
-        !isProcessingComplete &&
-        !hasFinalAnswer &&
-        userActionSteps.length === 0 &&
-        !hasErrorStep &&
-        !isShowingCurrentStep && (
-          <div style={{ marginTop: "8px", marginBottom: "2px" }}>
+        {/* Final outside card indicating interruption */}
+        {isStopped && (
+          <div style={{ marginTop: "8px" }}>
             <div
               style={{
-                fontSize: "10px",
-                color: "#94a3b8",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: "4px",
-                userSelect: "none",
-              }}
-            >
-              <span>CUGA is thinking..</span>
-            </div>
-            <div
-              style={{
-                height: "4px",
-                position: "relative",
-                overflow: "hidden",
-                background: "#eef2ff",
-                borderRadius: "9999px",
-                boxShadow: "inset 0 0 0 1px #e5e7eb",
+                marginBottom: "16px",
+                padding: "12px",
+                backgroundColor: "#ffffff",
+                borderRadius: "6px",
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
               }}
             >
               <div
                 style={{
-                  position: "absolute",
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: "28%",
-                  background: "linear-gradient(90deg, #a78bfa 0%, #6366f1 100%)",
-                  borderRadius: "9999px",
-                  animation: "cugaShimmer 1.7s infinite",
-                  boxShadow: "0 0 6px rgba(99,102,241,0.25)",
+                  marginBottom: "12px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                 }}
-              />
+              >
+                <h3
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    color: "#475569",
+                    margin: "0",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  Task Interrupted
+                </h3>
+              </div>
+              <div>
+                <p
+                  style={{
+                    margin: "0",
+                    fontSize: "13px",
+                    color: "#64748b",
+                    lineHeight: "1.4",
+                  }}
+                >
+                  The task was stopped by the user.
+                </p>
+              </div>
             </div>
-            <style>
-              {`
+          </div>
+        )}
+
+        {/* Reasoning Section - Collapsible when final answer or user action is present */}
+        {!isStopped &&
+          viewMode === "inplace" &&
+          (hasFinalAnswer || userActionSteps.length > 0) &&
+          reasoningSteps.length > 0 && (
+            <div
+              style={{
+                marginBottom: "16px",
+                padding: "12px",
+                backgroundColor: "#f8fafc",
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  cursor: "pointer",
+                  userSelect: "none",
+                }}
+                onClick={handleToggleReasoning}
+              >
+                <h3
+                  style={{
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#374151",
+                    margin: "0",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <span
+                    style={{
+                      transform: isReasoningCollapsed
+                        ? "rotate(-90deg)"
+                        : "rotate(0deg)",
+                      transition: "transform 0.3s ease",
+                      fontSize: "14px",
+                    }}
+                  >
+                    ▼
+                  </span>
+                  Reasoning Process
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: "400",
+                      color: "#6b7280",
+                      backgroundColor: "#e5e7eb",
+                      padding: "2px 8px",
+                      borderRadius: "12px",
+                    }}
+                  >
+                    {reasoningSteps.length} steps
+                  </span>
+                </h3>
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: "#6b7280",
+                    fontStyle: "italic",
+                  }}
+                >
+                  {isReasoningCollapsed
+                    ? "Click to expand"
+                    : "Click to collapse"}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  maxHeight: isReasoningCollapsed ? "0" : "10000px",
+                  overflow: "hidden",
+                  transition:
+                    "max-height 0.5s ease-in-out, opacity 0.3s ease-in-out",
+                  opacity: isReasoningCollapsed ? 0 : 1,
+                }}
+              >
+                <div style={{ marginTop: "12px" }}>
+                  {reasoningSteps.map((step) => renderStepCard(step, false))}
+                </div>
+              </div>
+            </div>
+          )}
+
+        {/* Current Step Display - Shows one step at a time with smooth transitions */}
+        {!isStopped && viewMode === "inplace" && isShowingCurrentStep && (
+          <div
+            className={`current-step-container ${isLoading ? "loading-border" : ""}`}
+            style={{
+              position: "relative",
+              minHeight: "200px",
+            }}
+          >
+            {renderStepCard(currentStep, true)}
+          </div>
+        )}
+
+        {/* Final Answer Steps - Always visible (in-place mode) */}
+        {!isStopped &&
+          viewMode === "inplace" &&
+          finalAnswerSteps.map((step) => renderStepCard(step, false))}
+
+        {/* User Action Steps - Always visible when present (in-place mode) */}
+        {!isStopped &&
+          viewMode === "inplace" &&
+          userActionSteps.map((step) => renderStepCard(step, false))}
+
+        {/* Loading indicator - Only show when processing and no current step */}
+        {!isStopped &&
+          viewMode === "inplace" &&
+          currentSteps.length > 0 &&
+          !isProcessingComplete &&
+          !hasFinalAnswer &&
+          userActionSteps.length === 0 &&
+          !hasErrorStep &&
+          !isShowingCurrentStep && (
+            <div style={{ marginTop: "8px", marginBottom: "2px" }}>
+              <div
+                style={{
+                  fontSize: "10px",
+                  color: "#94a3b8",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: "4px",
+                  userSelect: "none",
+                }}
+              >
+                <span>CUGA is thinking..</span>
+              </div>
+              <div
+                style={{
+                  height: "4px",
+                  position: "relative",
+                  overflow: "hidden",
+                  background: "#eef2ff",
+                  borderRadius: "9999px",
+                  boxShadow: "inset 0 0 0 1px #e5e7eb",
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: "28%",
+                    background:
+                      "linear-gradient(90deg, #a78bfa 0%, #6366f1 100%)",
+                    borderRadius: "9999px",
+                    animation: "cugaShimmer 1.7s infinite",
+                    boxShadow: "0 0 6px rgba(99,102,241,0.25)",
+                  }}
+                />
+              </div>
+              <style>
+                {`
               @keyframes cugaShimmer {
                 0% { transform: translateX(-100%); }
                 100% { transform: translateX(300%); }
               }
             `}
-            </style>
-          </div>
-        )}
-    </div>
+              </style>
+            </div>
+          )}
+      </div>
     </>
   );
 };

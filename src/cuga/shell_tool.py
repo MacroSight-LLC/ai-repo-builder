@@ -89,15 +89,21 @@ ALLOWED_COMMANDS = {
 BLOCKED_PATTERNS = [
     "rm -rf /",
     "rm -rf ~",
+    "rm -rf .",
+    "rm --recursive",
     "sudo ",
     "> /dev/",
     "| sh",
+    "|sh",
     "| bash",
+    "|bash",
     "; rm ",
     "&& rm -rf",
     "mkfs",
     "dd if=",
     ":(){ :|:",
+    "docker-compose run",
+    "docker-compose exec",
 ]
 
 # Patterns matched as whole first-word commands (not substrings) to avoid
@@ -105,7 +111,17 @@ BLOCKED_PATTERNS = [
 _BLOCKED_FIRST_WORD = {"eval", "exec"}
 
 # Docker subcommands considered safe (no host filesystem access)
-_DOCKER_SAFE_SUBCMDS = {"build", "compose", "images", "ps", "logs", "inspect", "tag", "pull", "push"}
+_DOCKER_SAFE_SUBCMDS = {
+    "build",
+    "compose",
+    "images",
+    "ps",
+    "logs",
+    "inspect",
+    "tag",
+    "pull",
+    "push",
+}
 
 # find flags that allow arbitrary execution or destructive mutations
 _FIND_DANGEROUS_FLAGS = {"-exec", "-execdir", "-delete", "-ok", "-okdir"}
@@ -116,6 +132,41 @@ def _validate_command(command: str) -> str | None:
     for pattern in BLOCKED_PATTERNS:
         if pattern in command:
             return f"Blocked: command contains dangerous pattern '{pattern}'"
+
+    # ── Reject shell metacharacters outside of quoted strings ──
+    # We use shlex to strip quoted content, then check the unquoted skeleton
+    # for shell operators.  This allows e.g. python3 -c 'import sys; ...'
+    # while still blocking "ls ; rm -rf /".
+    _SHELL_METACHARS = ["&&", "||", ";", "|", "`", "$(", "${", "\n"]
+    try:
+        tokens = shlex.split(command)
+        # Rebuild command from tokens WITHOUT quotes to strip quoted content,
+        # then check for metacharacters in the *raw* command skeleton.
+        # A simpler approach: check each raw token for shell operators.
+        # Since shlex.split correctly handles quoting, any metachar that appears
+        # inside a quoted arg is a single token with no special meaning.
+        # We only need to check whether any token IS a shell operator.
+        shell_operators = {";", "|", "||", "&&", "`"}
+        for token in tokens:
+            if token in shell_operators:
+                return (
+                    f"Blocked: command contains shell operator '{token}'. "
+                    "Only single commands are allowed (no chaining or piping)."
+                )
+            if token.startswith("`") or "$(" in token or "${" in token:
+                return (
+                    "Blocked: command contains shell expansion. "
+                    "Only single commands are allowed."
+                )
+    except ValueError:
+        # shlex.split fails on unbalanced quotes — reject the command
+        return "Blocked: command has unbalanced quotes"
+
+    if "\n" in command:
+        return (
+            "Blocked: command contains newline. "
+            "Only single commands are allowed."
+        )
 
     # Check first-word blocks (e.g. bare "eval" / "exec" as the command)
     first_word = command.strip().split()[0] if command.strip() else ""
@@ -141,9 +192,9 @@ def _validate_command(command: str) -> str | None:
     # Docker: only allow safe subcommands (block `docker run -v /:/host ...`)
     if base_cmd in ("docker", "docker-compose") and len(parts) > 1:
         sub = parts[1]
-        if base_cmd == "docker" and sub not in _DOCKER_SAFE_SUBCMDS:
+        if sub not in _DOCKER_SAFE_SUBCMDS:
             return (
-                f"Blocked: 'docker {sub}' is not allowed. "
+                f"Blocked: '{base_cmd} {sub}' is not allowed. "
                 f"Safe docker subcommands: {', '.join(sorted(_DOCKER_SAFE_SUBCMDS))}"
             )
 
@@ -252,8 +303,10 @@ async def _execute_shell(command: str, working_dir: str = "") -> str:
     Path(cwd).mkdir(parents=True, exist_ok=True)
 
     try:
-        proc = await asyncio.create_subprocess_shell(
-            command,
+        # Use create_subprocess_exec (no shell) to prevent injection
+        parts = shlex.split(command)
+        proc = await asyncio.create_subprocess_exec(
+            *parts,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,

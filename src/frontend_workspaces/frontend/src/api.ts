@@ -19,7 +19,9 @@ export function clearAuthCache(): void {
 export async function getAuthConfig(): Promise<{ enabled: boolean }> {
   if (authConfigCache !== null) return authConfigCache;
   const base = getApiBaseUrl();
-  const res = await fetch(`${base}/api/auth/config`, { credentials: "include" });
+  const res = await fetch(`${base}/api/auth/config`, {
+    credentials: "include",
+  });
   const data = await res.json().catch(() => ({ enabled: false }));
   authConfigCache = { enabled: !!data.enabled };
   return authConfigCache;
@@ -27,10 +29,13 @@ export async function getAuthConfig(): Promise<{ enabled: boolean }> {
 
 export async function apiFetch(
   url: string | URL,
-  init?: RequestInit
+  init?: RequestInit,
 ): Promise<Response> {
   const base = getApiBaseUrl();
-  const fullUrl = typeof url === "string" && !url.startsWith("http") ? `${base}${url.startsWith("/") ? "" : "/"}${url}` : url;
+  const fullUrl =
+    typeof url === "string" && !url.startsWith("http")
+      ? `${base}${url.startsWith("/") ? "" : "/"}${url}`
+      : url;
   const res = await fetch(fullUrl, {
     ...init,
     credentials: "include",
@@ -46,7 +51,10 @@ export async function apiFetch(
   return res;
 }
 
-export async function postAuthCallback(code: string, state: string): Promise<Response> {
+export async function postAuthCallback(
+  code: string,
+  state: string,
+): Promise<Response> {
   const base = getApiBaseUrl();
   return apiFetch(`${base}/auth/callback`, {
     method: "POST",
@@ -65,9 +73,12 @@ export async function getAgentContext(): Promise<Response> {
 }
 
 export async function getAgentState(threadId: string): Promise<Response> {
-  return apiFetch(`/api/agent/state?thread_id=${encodeURIComponent(threadId)}`, {
-    headers: { "X-Thread-ID": threadId },
-  });
+  return apiFetch(
+    `/api/agent/state?thread_id=${encodeURIComponent(threadId)}`,
+    {
+      headers: { "X-Thread-ID": threadId },
+    },
+  );
 }
 
 export async function postStop(threadId: string): Promise<Response> {
@@ -85,7 +96,7 @@ export async function postStream(
     useDraft?: boolean;
     disableHistory?: boolean;
     signal?: AbortSignal;
-  }
+  },
 ): Promise<Response> {
   const base = getApiBaseUrl();
   const headers: Record<string, string> = {
@@ -102,15 +113,19 @@ export async function postStream(
   });
 }
 
-export async function getConversationStreamEvents(threadId: string): Promise<Response> {
+export async function getConversationStreamEvents(
+  threadId: string,
+): Promise<Response> {
   return apiFetch(
-    `/api/conversation-stream-events/${threadId}?agent_id=cuga-default&user_id=default_user`
+    `/api/conversation-stream-events/${threadId}?agent_id=cuga-default&user_id=default_user`,
   );
 }
 
-export async function getConversationMessages(threadId: string): Promise<Response> {
+export async function getConversationMessages(
+  threadId: string,
+): Promise<Response> {
   return apiFetch(
-    `/api/conversation-messages/${threadId}?agent_id=cuga-default&user_id=default_user`
+    `/api/conversation-messages/${threadId}?agent_id=cuga-default&user_id=default_user`,
   );
 }
 
@@ -119,7 +134,9 @@ export async function getManageConfig(draft?: boolean): Promise<Response> {
   return apiFetch(`/api/manage/config${q}`);
 }
 
-export async function getManageConfigVersion(version: string): Promise<Response> {
+export async function getManageConfigVersion(
+  version: string,
+): Promise<Response> {
   return apiFetch(`/api/manage/config?version=${encodeURIComponent(version)}`);
 }
 
@@ -127,7 +144,9 @@ export async function getManageConfigHistory(): Promise<Response> {
   return apiFetch("/api/manage/config/history");
 }
 
-export async function postManageConfigDraft(config: unknown): Promise<Response> {
+export async function postManageConfigDraft(
+  config: unknown,
+): Promise<Response> {
   return apiFetch("/api/manage/config/draft", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

@@ -451,7 +451,6 @@ async def build_project(
     if result.passed:
         try:
             from cuga.post_build_mcp import (
-                PostBuildSettings,
                 run_post_build_actions,
             )
 
@@ -487,6 +486,7 @@ async def build_project(
         logger.warning("Expected output dir {} not found", project_dir)
 
     return result.passed
+
 
 # ── Pretty-print helpers ──────────────────────────────────────────
 
@@ -550,8 +550,10 @@ def _print_build_result(spec: dict, output_dir: str, passed: bool) -> None:
             print(f"\n✅ Project built! Check: {output_dir}/{project_name}/")
     else:
         print(f"\n⚠️  Build completed with issues. Check: {output_dir}/{project_name}/")
-        print("   Run validation manually: python -m cuga.post_build validate "
-              f"{output_dir}/{project_name}/")
+        print(
+            "   Run validation manually: python -m cuga.post_build validate "
+            f"{output_dir}/{project_name}/"
+        )
 
 
 # ── Main ──────────────────────────────────────────────────────────

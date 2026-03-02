@@ -1,4 +1,12 @@
-import { useState, Component, ErrorInfo, ReactNode, useCallback, useRef, useEffect } from "react";
+import {
+  useState,
+  Component,
+  ErrorInfo,
+  ReactNode,
+  useCallback,
+  useRef,
+  useEffect,
+} from "react";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { CustomChat } from "./CustomChat";
@@ -56,67 +64,85 @@ class ErrorBoundary extends Component<
 }
 
 export function App() {
-  const [globalVariables, setGlobalVariables] = useState<Record<string, any>>({});
-  const [variablesHistory, setVariablesHistory] = useState<Array<{
-    id: string;
-    title: string;
-    timestamp: number;
-    variables: Record<string, any>;
-  }>>([]);
+  const [globalVariables, setGlobalVariables] = useState<Record<string, any>>(
+    {},
+  );
+  const [variablesHistory, setVariablesHistory] = useState<
+    Array<{
+      id: string;
+      title: string;
+      timestamp: number;
+      variables: Record<string, any>;
+    }>
+  >([]);
   const [selectedAnswerId, setSelectedAnswerId] = useState<string | null>(null);
   const [workspacePanelOpen, setWorkspacePanelOpen] = useState(true);
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   const [highlightedFile, setHighlightedFile] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"conversations" | "variables" | "savedflows">("conversations");
+  const [activeTab, setActiveTab] = useState<
+    "conversations" | "variables" | "savedflows"
+  >("conversations");
   const [previousVariablesCount, setPreviousVariablesCount] = useState(0);
   const [previousHistoryLength, setPreviousHistoryLength] = useState(0);
   const [threadId, setThreadId] = useState<string>("");
-  const leftSidebarRef = useRef<{ addConversation: (title: string) => void } | null>(null);
+  const leftSidebarRef = useRef<{
+    addConversation: (title: string) => void;
+  } | null>(null);
   // Initialize hasStartedChat from URL query parameter immediately
   const [hasStartedChat, setHasStartedChat] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('mode') === 'advanced';
+    return urlParams.get("mode") === "advanced";
   });
 
   // Update URL when entering advanced mode
   useEffect(() => {
     if (hasStartedChat) {
       const url = new URL(window.location.href);
-      url.searchParams.set('mode', 'advanced');
-      window.history.replaceState({}, '', url.toString());
+      url.searchParams.set("mode", "advanced");
+      window.history.replaceState({}, "", url.toString());
     }
   }, [hasStartedChat]);
 
-  const { isTourActive, hasSeenTour, startTour, completeTour, skipTour, resetTour } = useTour();
+  const {
+    isTourActive,
+    hasSeenTour,
+    startTour,
+    completeTour,
+    skipTour,
+    resetTour,
+  } = useTour();
 
   // Handle variables updates from CustomChat
-  const handleVariablesUpdate = useCallback((variables: Record<string, any>, history: Array<any>) => {
-    const currentVariablesCount = Object.keys(variables).length;
-    const currentHistoryLength = history.length;
+  const handleVariablesUpdate = useCallback(
+    (variables: Record<string, any>, history: Array<any>) => {
+      const currentVariablesCount = Object.keys(variables).length;
+      const currentHistoryLength = history.length;
 
-    setGlobalVariables(variables);
-    setVariablesHistory(history);
+      setGlobalVariables(variables);
+      setVariablesHistory(history);
 
-    // Only switch to variables tab when there's new data (more variables or longer history)
-    const hasNewVariables = currentVariablesCount > previousVariablesCount;
-    const hasNewHistory = currentHistoryLength > previousHistoryLength;
+      // Only switch to variables tab when there's new data (more variables or longer history)
+      const hasNewVariables = currentVariablesCount > previousVariablesCount;
+      const hasNewHistory = currentHistoryLength > previousHistoryLength;
 
-    if (hasNewVariables || hasNewHistory) {
-      setActiveTab("variables");
-    }
+      if (hasNewVariables || hasNewHistory) {
+        setActiveTab("variables");
+      }
 
-    // Update previous counts
-    setPreviousVariablesCount(currentVariablesCount);
-    setPreviousHistoryLength(currentHistoryLength);
-  }, [previousVariablesCount, previousHistoryLength]);
+      // Update previous counts
+      setPreviousVariablesCount(currentVariablesCount);
+      setPreviousHistoryLength(currentHistoryLength);
+    },
+    [previousVariablesCount, previousHistoryLength],
+  );
 
   // Handle message sent from CustomChat
   const handleMessageSent = useCallback((message: string) => {
     // Add a new conversation to the left sidebar
     if (leftSidebarRef.current) {
-      const title = message.length > 50 ? message.substring(0, 50) + "..." : message;
+      const title =
+        message.length > 50 ? message.substring(0, 50) + "..." : message;
       leftSidebarRef.current.addConversation(title);
-    }
     }
     // Switch to conversations tab to show the new conversation
     setActiveTab("conversations");
@@ -132,28 +158,32 @@ export function App() {
     {
       target: ".welcome-title",
       title: "Welcome to CUGA!",
-      content: "CUGA is an intelligent digital agent that autonomously executes complex tasks through multi-agent orchestration, API integration, and code generation.",
+      content:
+        "CUGA is an intelligent digital agent that autonomously executes complex tasks through multi-agent orchestration, API integration, and code generation.",
       placement: "bottom",
       highlightPadding: 12,
     },
     {
       target: "#main-input_field",
       title: "Chat Input",
-      content: "Type your requests here. You can ask CUGA to manage contacts, read files, send emails, or perform any complex task.",
+      content:
+        "Type your requests here. You can ask CUGA to manage contacts, read files, send emails, or perform any complex task.",
       placement: "top",
       highlightPadding: 10,
     },
     {
       target: "#main-input_field",
       title: "File Tagging with @",
-      content: "Type @ followed by a file name to tag files in your message. This allows CUGA to access and work with specific files from your workspace.",
+      content:
+        "Type @ followed by a file name to tag files in your message. This allows CUGA to access and work with specific files from your workspace.",
       placement: "top",
       highlightPadding: 10,
     },
     {
       target: ".example-utterances-widget",
       title: "Try Example Queries",
-      content: "Click any of these example queries to get started quickly. These demonstrate the types of tasks CUGA can handle.",
+      content:
+        "Click any of these example queries to get started quickly. These demonstrate the types of tasks CUGA can handle.",
       placement: "top",
       highlightPadding: 12,
       beforeShow: () => {
@@ -164,7 +194,8 @@ export function App() {
     {
       target: ".welcome-features",
       title: "Key Features",
-      content: "CUGA offers multi-agent coordination, secure code execution, API integration, and smart memory to handle complex workflows.",
+      content:
+        "CUGA offers multi-agent coordination, secure code execution, API integration, and smart memory to handle complex workflows.",
       placement: "top",
       highlightPadding: 12,
     },
@@ -183,10 +214,12 @@ export function App() {
 
   return (
     <ErrorBoundary>
-      <div className={`app-layout ${!hasStartedChat ? 'welcome-mode' : ''}`}>
+      <div className={`app-layout ${!hasStartedChat ? "welcome-mode" : ""}`}>
         {hasStartedChat && (
           <ConfigHeader
-            onToggleLeftSidebar={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
+            onToggleLeftSidebar={() =>
+              setLeftSidebarCollapsed(!leftSidebarCollapsed)
+            }
             onToggleWorkspace={() => setWorkspacePanelOpen(!workspacePanelOpen)}
             leftSidebarCollapsed={leftSidebarCollapsed}
             workspaceOpen={workspacePanelOpen}
@@ -265,7 +298,5 @@ export function BootstrapAgentic(contentRoot: HTMLElement) {
   console.log("Bootstrapping Agentic Chat in sidepanel");
   const root = createRoot(contentRoot);
   // Render the App component into the root.
-  root.render(
-      <App />
-  );
+  root.render(<App />);
 }

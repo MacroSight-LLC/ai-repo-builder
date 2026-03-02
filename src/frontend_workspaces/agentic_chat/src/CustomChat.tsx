@@ -1,5 +1,18 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Send, RotateCcw, Bot, User, FileText, Database, Code, Terminal, Cpu, Globe, Settings, ChevronRight } from "lucide-react";
+import {
+  Send,
+  RotateCcw,
+  Bot,
+  User,
+  FileText,
+  Database,
+  Code,
+  Terminal,
+  Cpu,
+  Globe,
+  Settings,
+  ChevronRight,
+} from "lucide-react";
 import { sanitizeHtml } from "./sanitize";
 import CardManager from "./CardManager";
 import { StopButton } from "./floating/stop_button";
@@ -30,7 +43,10 @@ interface ChatInstance {
 }
 
 interface CustomChatProps {
-  onVariablesUpdate?: (variables: Record<string, any>, history: Array<any>) => void;
+  onVariablesUpdate?: (
+    variables: Record<string, any>,
+    history: Array<any>,
+  ) => void;
   onFileAutocompleteOpen?: () => void;
   onFileHover?: (filePath: string | null) => void;
   onMessageSent?: (message: string) => void;
@@ -43,7 +59,17 @@ interface CustomChatProps {
   useDraftAgent?: boolean;
 }
 
-export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHover, onMessageSent, onChatStarted, onThreadIdChange, initialChatStarted = false, forceAdvancedMode = false, useDraftAgent = false }: CustomChatProps) {
+export function CustomChat({
+  onVariablesUpdate,
+  onFileAutocompleteOpen,
+  onFileHover,
+  onMessageSent,
+  onChatStarted,
+  onThreadIdChange,
+  initialChatStarted = false,
+  forceAdvancedMode = false,
+  useDraftAgent = false,
+}: CustomChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -52,10 +78,16 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
   const currentChatInstanceRef = useRef<ChatInstance | null>(null);
   const [showFileAutocomplete, setShowFileAutocomplete] = useState(false);
   const [autocompleteQuery, setAutocompleteQuery] = useState("");
-  const [allFiles, setAllFiles] = useState<Array<{ name: string; path: string }>>([]);
-  const [filteredFiles, setFilteredFiles] = useState<Array<{ name: string; path: string }>>([]);
+  const [allFiles, setAllFiles] = useState<
+    Array<{ name: string; path: string }>
+  >([]);
+  const [filteredFiles, setFilteredFiles] = useState<
+    Array<{ name: string; path: string }>
+  >([]);
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
-  const [selectedFiles, setSelectedFiles] = useState<Array<{ name: string; path: string; id: string }>>([]);
+  const [selectedFiles, setSelectedFiles] = useState<
+    Array<{ name: string; path: string; id: string }>
+  >([]);
   const [threadId, setThreadId] = useState<string>("");
   const threadIdRef = useRef<string>("");
   const [showExampleUtterances, setShowExampleUtterances] = useState(true);
@@ -63,7 +95,9 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
   const effectiveHasStartedChat = forceAdvancedMode || hasStartedChat;
   const [followupSuggestions, setFollowupSuggestions] = useState<string[]>([]);
   const [lastUserQuery, setLastUserQuery] = useState<string>("");
-  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set(['contacts.txt']));
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(
+    new Set(["contacts.txt"]),
+  );
 
   useEffect(() => {
     if (onChatStarted) {
@@ -101,33 +135,33 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
   // Listen for variables updates from CardManager
   useEffect(() => {
     const handleVariablesUpdate = ((event: CustomEvent) => {
-      console.log('[CustomChat] Received variablesUpdate event:', event.detail);
+      console.log("[CustomChat] Received variablesUpdate event:", event.detail);
       const { variables, history } = event.detail;
-      console.log('[CustomChat] Variables keys:', Object.keys(variables));
-      console.log('[CustomChat] History length:', history.length);
+      console.log("[CustomChat] Variables keys:", Object.keys(variables));
+      console.log("[CustomChat] History length:", history.length);
       if (onVariablesUpdate) {
-        console.log('[CustomChat] Calling onVariablesUpdate callback');
+        console.log("[CustomChat] Calling onVariablesUpdate callback");
         onVariablesUpdate(variables, history);
       } else {
-        console.warn('[CustomChat] onVariablesUpdate callback is not defined!');
+        console.warn("[CustomChat] onVariablesUpdate callback is not defined!");
       }
     }) as EventListener;
 
     if (typeof window !== "undefined") {
-      console.log('[CustomChat] Setting up variablesUpdate event listener');
-      window.addEventListener('variablesUpdate', handleVariablesUpdate);
+      console.log("[CustomChat] Setting up variablesUpdate event listener");
+      window.addEventListener("variablesUpdate", handleVariablesUpdate);
       return () => {
-        console.log('[CustomChat] Cleaning up variablesUpdate event listener');
-        window.removeEventListener('variablesUpdate', handleVariablesUpdate);
+        console.log("[CustomChat] Cleaning up variablesUpdate event listener");
+        window.removeEventListener("variablesUpdate", handleVariablesUpdate);
       };
     }
-  }, []);
+  }, [onVariablesUpdate]);
 
   // Listen for final answer completion from CardManager
   useEffect(() => {
     const handleFinalAnswerComplete = (() => {
-      console.log('[CustomChat] Received finalAnswerComplete event');
-      
+      console.log("[CustomChat] Received finalAnswerComplete event");
+
       // Generate followup suggestions based on the last query
       if (lastUserQuery) {
         const suggestions = generateFollowupSuggestions(lastUserQuery);
@@ -136,11 +170,16 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     }) as EventListener;
 
     if (typeof window !== "undefined") {
-      console.log('[CustomChat] Setting up finalAnswerComplete event listener');
-      window.addEventListener('finalAnswerComplete', handleFinalAnswerComplete);
+      console.log("[CustomChat] Setting up finalAnswerComplete event listener");
+      window.addEventListener("finalAnswerComplete", handleFinalAnswerComplete);
       return () => {
-        console.log('[CustomChat] Cleaning up finalAnswerComplete event listener');
-        window.removeEventListener('finalAnswerComplete', handleFinalAnswerComplete);
+        console.log(
+          "[CustomChat] Cleaning up finalAnswerComplete event listener",
+        );
+        window.removeEventListener(
+          "finalAnswerComplete",
+          handleFinalAnswerComplete,
+        );
       };
     }
   }, [lastUserQuery]);
@@ -148,20 +187,25 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
   // Function to generate contextual followup suggestions
   const generateFollowupSuggestions = (query: string): string[] => {
     const lowerQuery = query.toLowerCase();
-    
+
     // Exact match for the demo workflow
-    if (lowerQuery.includes('from contacts.txt show me which users belong to the crm system')) {
-      return [
-        "show me details of first one",
-        "Show me details of Sarah"
-      ];
+    if (
+      lowerQuery.includes(
+        "from contacts.txt show me which users belong to the crm system",
+      )
+    ) {
+      return ["show me details of first one", "Show me details of Sarah"];
     }
-    
+
     // Second level followups after showing details of a user/contact
-    if (lowerQuery.includes('show me details of') || lowerQuery.includes('details of sarah') || lowerQuery.includes('details of first one')) {
+    if (
+      lowerQuery.includes("show me details of") ||
+      lowerQuery.includes("details of sarah") ||
+      lowerQuery.includes("details of first one")
+    ) {
       return [
         "How many employees work at her company's account",
-        "Which percentile is her account's revenue across all accounts?"
+        "Which percentile is her account's revenue across all accounts?",
       ];
     }
 
@@ -180,12 +224,12 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
   useEffect(() => {
     const loadFiles = async () => {
       try {
-        const { workspaceService } = await import('./workspaceService');
+        const { workspaceService } = await import("./workspaceService");
         const data = await workspaceService.getWorkspaceTree();
         const files = extractFiles(data.tree || []);
         setAllFiles(files);
       } catch (error) {
-        console.error('Error loading files:', error);
+        console.error("Error loading files:", error);
       }
     };
 
@@ -201,15 +245,17 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
       return;
     }
 
-    if (autocompleteQuery === '') {
+    if (autocompleteQuery === "") {
       setFilteredFiles(allFiles.slice(0, 10));
     } else {
       const lowerQuery = autocompleteQuery.toLowerCase();
-      const filtered = allFiles.filter(file => {
-        const nameMatch = file.name.toLowerCase().includes(lowerQuery);
-        const pathMatch = file.path.toLowerCase().includes(lowerQuery);
-        return nameMatch || pathMatch;
-      }).slice(0, 10);
+      const filtered = allFiles
+        .filter((file) => {
+          const nameMatch = file.name.toLowerCase().includes(lowerQuery);
+          const pathMatch = file.path.toLowerCase().includes(lowerQuery);
+          return nameMatch || pathMatch;
+        })
+        .slice(0, 10);
       setFilteredFiles(filtered);
     }
     setSelectedFileIndex(0);
@@ -217,14 +263,21 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
 
   // Highlight file when selection changes via keyboard navigation
   useEffect(() => {
-    if (showFileAutocomplete && filteredFiles.length > 0 && selectedFileIndex >= 0 && selectedFileIndex < filteredFiles.length) {
+    if (
+      showFileAutocomplete &&
+      filteredFiles.length > 0 &&
+      selectedFileIndex >= 0 &&
+      selectedFileIndex < filteredFiles.length
+    ) {
       onFileHover?.(filteredFiles[selectedFileIndex].path);
     } else if (!showFileAutocomplete) {
       onFileHover?.(null);
     }
   }, [selectedFileIndex, showFileAutocomplete, filteredFiles, onFileHover]);
 
-  const extractFiles = (nodes: any[]): Array<{ name: string; path: string }> => {
+  const extractFiles = (
+    nodes: any[],
+  ): Array<{ name: string; path: string }> => {
     const files: Array<{ name: string; path: string }> = [];
     for (const node of nodes) {
       if (node.type === "file") {
@@ -236,23 +289,27 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     return files;
   };
 
-
   const handleSend = async () => {
     if (!inputRef.current) return;
 
-    const text = inputRef.current.textContent?.trim() || '';
+    const text = inputRef.current.textContent?.trim() || "";
     if (!text || isProcessing) return;
 
     // Convert file reference elements back to ./path format for backend processing
     let processedText = text;
-    const fileElements = inputRef.current.querySelectorAll('.inline-file-reference');
+    const fileElements = inputRef.current.querySelectorAll(
+      ".inline-file-reference",
+    );
 
     fileElements.forEach((element) => {
-      const filePath = element.getAttribute('data-file-path');
-      const fileName = element.getAttribute('data-file-name');
+      const filePath = element.getAttribute("data-file-path");
+      const fileName = element.getAttribute("data-file-name");
       if (filePath && fileName) {
         // Replace the element's text content with the dot path
-        processedText = processedText.replace(element.textContent || '', `./${filePath}`);
+        processedText = processedText.replace(
+          element.textContent || "",
+          `./${filePath}`,
+        );
       }
     });
 
@@ -284,7 +341,7 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     }
 
     // Clear the input
-    inputRef.current.innerHTML = '';
+    inputRef.current.innerHTML = "";
     setInputValue("");
     setSelectedFiles([]);
     setShowExampleUtterances(false);
@@ -314,16 +371,22 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
         const newThreadId = randomUUID();
         setThreadId(newThreadId);
         threadIdRef.current = newThreadId;
-        console.log('[CustomChat] Generated new threadId:', newThreadId);
+        console.log("[CustomChat] Generated new threadId:", newThreadId);
         // Notify parent of new thread ID
         if (onThreadIdChange) {
           onThreadIdChange(newThreadId);
         }
       }
       const finalThreadId = threadIdRef.current || threadId;
-      console.log('[CustomChat] Sending message with threadId:', finalThreadId);
+      console.log("[CustomChat] Sending message with threadId:", finalThreadId);
       // Call the streaming workflow with processed text (bracket format converted to ./path)
-      await fetchStreamingData(newChatInstance as any, processedText, undefined, finalThreadId, useDraftAgent);
+      await fetchStreamingData(
+        newChatInstance as any,
+        processedText,
+        undefined,
+        finalThreadId,
+        useDraftAgent,
+      );
     } catch (error) {
       console.error("Error sending message:", error);
     } finally {
@@ -336,18 +399,18 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     const newThreadId = randomUUID();
     setThreadId(newThreadId);
     threadIdRef.current = newThreadId;
-    
+
     // Notify parent of new thread ID
     if (onThreadIdChange) {
       onThreadIdChange(newThreadId);
     }
-    
+
     try {
-      await apiFetch('/reset', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'X-Thread-ID': newThreadId
+      await apiFetch("/reset", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Thread-ID": newThreadId,
         },
       });
     } catch (error) {
@@ -366,10 +429,10 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
 
   const handleContentEditableInput = (e: React.FormEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
-    const text = target.textContent || '';
+    const text = target.textContent || "";
 
     setInputValue(text);
-    
+
     // Hide examples when user starts typing, show when empty
     if (text.trim().length > 0) {
       setShowExampleUtterances(false);
@@ -378,9 +441,9 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     }
 
     // Check for @ trigger
-    const lastAtIndex = text.lastIndexOf('@');
+    const lastAtIndex = text.lastIndexOf("@");
     if (lastAtIndex !== -1) {
-      const charBeforeAt = lastAtIndex > 0 ? text[lastAtIndex - 1] : ' ';
+      const charBeforeAt = lastAtIndex > 0 ? text[lastAtIndex - 1] : " ";
       const isValidTrigger = lastAtIndex === 0 || /\s/.test(charBeforeAt);
 
       if (isValidTrigger) {
@@ -398,14 +461,16 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
 
     // Extract file references from the HTML content
     const foundFiles: Array<{ name: string; path: string; id: string }> = [];
-    const fileElements = target.querySelectorAll('.inline-file-reference');
+    const fileElements = target.querySelectorAll(".inline-file-reference");
 
     fileElements.forEach((element) => {
-      const filePath = element.getAttribute('data-file-path');
-      const fileName = element.getAttribute('data-file-name');
+      const filePath = element.getAttribute("data-file-path");
+      const fileName = element.getAttribute("data-file-name");
       if (filePath && fileName) {
-        const existingFile = selectedFiles.find(f => f.path === filePath);
-        const id = existingFile?.id || `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const existingFile = selectedFiles.find((f) => f.path === filePath);
+        const id =
+          existingFile?.id ||
+          `file-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
         foundFiles.push({ name: fileName, path: filePath, id });
       }
     });
@@ -413,7 +478,7 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     setSelectedFiles(foundFiles);
 
     // Auto-resize
-    target.style.height = 'auto';
+    target.style.height = "auto";
     target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
   };
 
@@ -421,12 +486,12 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     const target = e.target as HTMLElement;
 
     // Check if clicked element is a remove button
-    if (target.classList.contains('file-chip-remove')) {
+    if (target.classList.contains("file-chip-remove")) {
       e.preventDefault();
       e.stopPropagation();
 
       // Find the parent file reference element
-      const fileChip = target.closest('.inline-file-reference');
+      const fileChip = target.closest(".inline-file-reference");
       if (fileChip && inputRef.current) {
         // Remove the file chip from the DOM
         fileChip.remove();
@@ -441,7 +506,7 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     }
 
     // Check if clicked within a file chip (but not on remove button)
-    const fileChip = target.closest('.inline-file-reference');
+    const fileChip = target.closest(".inline-file-reference");
     if (fileChip) {
       e.preventDefault();
       e.stopPropagation();
@@ -461,7 +526,7 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
           range.setEnd(nextNode, 0);
         } else {
           // Create a text node after the chip if none exists
-          const textNode = document.createTextNode('');
+          const textNode = document.createTextNode("");
           fileChip.parentNode?.insertBefore(textNode, nextNode);
           range.setStart(textNode, 0);
           range.setEnd(textNode, 0);
@@ -473,11 +538,10 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     }
   };
 
-
   const handleFileSelect = (filePath: string) => {
     if (!inputRef.current) return;
 
-    const selectedFile = allFiles.find(f => f.path === filePath);
+    const selectedFile = allFiles.find((f) => f.path === filePath);
     if (!selectedFile) return;
 
     // Find the @ trigger using the current selection/cursor position
@@ -487,16 +551,16 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     if (!range) return;
 
     // Create the file reference element
-    const fileElement = document.createElement('span');
-    fileElement.className = 'inline-file-reference';
-    fileElement.setAttribute('data-file-path', filePath);
-    fileElement.setAttribute('data-file-name', selectedFile.name);
-    fileElement.setAttribute('contentEditable', 'false');
+    const fileElement = document.createElement("span");
+    fileElement.className = "inline-file-reference";
+    fileElement.setAttribute("data-file-path", filePath);
+    fileElement.setAttribute("data-file-name", selectedFile.name);
+    fileElement.setAttribute("contentEditable", "false");
     fileElement.innerHTML = `<svg class="file-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14,2 14,8 20,8"></polyline></svg><span class="file-name">${selectedFile.name}</span><button class="file-chip-remove" type="button" aria-label="Remove file">×</button>`;
 
     // Find and replace the @ trigger and search term
-    const text = inputRef.current.textContent || '';
-    const lastAtIndex = text.lastIndexOf('@');
+    const text = inputRef.current.textContent || "";
+    const lastAtIndex = text.lastIndexOf("@");
     if (lastAtIndex === -1) return;
 
     const textAfterAt = text.substring(lastAtIndex + 1);
@@ -506,16 +570,16 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     const treeWalker = document.createTreeWalker(
       inputRef.current,
       NodeFilter.SHOW_TEXT,
-      null
+      null,
     );
 
     let foundAtNode: Text | null = null;
     let atOffset = -1;
 
     let currentNode;
-    while (currentNode = treeWalker.nextNode()) {
-      const nodeText = currentNode.textContent || '';
-      const atIndex = nodeText.indexOf('@');
+    while ((currentNode = treeWalker.nextNode())) {
+      const nodeText = currentNode.textContent || "";
+      const atIndex = nodeText.indexOf("@");
 
       if (atIndex !== -1) {
         foundAtNode = currentNode as Text;
@@ -531,14 +595,17 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
       // Create a range to replace the @ and search term
       const replaceRange = document.createRange();
       replaceRange.setStart(foundAtNode, atOffset);
-      replaceRange.setEnd(foundAtNode, Math.min(searchTermEnd, foundAtNode.length));
+      replaceRange.setEnd(
+        foundAtNode,
+        Math.min(searchTermEnd, foundAtNode.length),
+      );
 
       // Replace the range with the file element
       replaceRange.deleteContents();
       replaceRange.insertNode(fileElement);
 
       // Add a space after the file element
-      const spaceNode = document.createTextNode(' ');
+      const spaceNode = document.createTextNode(" ");
       replaceRange.setStartAfter(fileElement);
       replaceRange.insertNode(spaceNode);
 
@@ -563,7 +630,7 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     e.preventDefault();
 
     // Get plain text from clipboard
-    const text = e.clipboardData.getData('text/plain');
+    const text = e.clipboardData.getData("text/plain");
 
     // Insert the plain text at cursor position
     const selection = window.getSelection();
@@ -587,41 +654,41 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
 
   const handleExampleClick = (utterance: string) => {
     if (!inputRef.current) return;
-    
+
     // Set the input content to the example utterance
     inputRef.current.textContent = utterance;
     setInputValue(utterance);
     setShowExampleUtterances(false);
-    
+
     // Focus the input and scroll it into view
     inputRef.current.focus();
-    inputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    
+    inputRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+
     // Trigger input handler to update state
     handleContentEditableInput({ currentTarget: inputRef.current } as any);
-    
+
     // Small delay to ensure the input is visible, then scroll to it
     setTimeout(() => {
-      inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 100);
   };
 
   const handleFollowupClick = (suggestion: string) => {
     if (!inputRef.current) return;
-    
+
     // Set the input content to the suggestion
     inputRef.current.textContent = suggestion;
     setInputValue(suggestion);
-    
+
     // Clear the followup suggestions
     setFollowupSuggestions([]);
-    
+
     // Focus the input
     inputRef.current.focus();
-    
+
     // Trigger input handler to update state
     handleContentEditableInput({ currentTarget: inputRef.current } as any);
-    
+
     // Auto-submit the followup question
     setTimeout(() => {
       handleSend();
@@ -629,7 +696,7 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
   };
 
   const toggleFileExpand = (fileName: string) => {
-    setExpandedFiles(prev => {
+    setExpandedFiles((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(fileName)) {
         newSet.delete(fileName);
@@ -665,7 +732,10 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
 
       // Walk up the DOM to check if we're inside a file chip
       while (node && node !== e.currentTarget) {
-        if (node instanceof HTMLElement && node.classList.contains('inline-file-reference')) {
+        if (
+          node instanceof HTMLElement &&
+          node.classList.contains("inline-file-reference")
+        ) {
           isInsideChip = true;
           break;
         }
@@ -676,29 +746,52 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     // Prevent editing within file chips
     if (isInsideChip) {
       // Allow navigation keys and special keys
-      const allowedKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'];
-      const controlKeys = ['Backspace', 'Delete'];
+      const allowedKeys = [
+        "ArrowLeft",
+        "ArrowRight",
+        "ArrowUp",
+        "ArrowDown",
+        "Home",
+        "End",
+        "PageUp",
+        "PageDown",
+      ];
+      const controlKeys = ["Backspace", "Delete"];
 
-      if (!allowedKeys.includes(e.key) && !controlKeys.includes(e.key) && !e.ctrlKey && !e.metaKey) {
+      if (
+        !allowedKeys.includes(e.key) &&
+        !controlKeys.includes(e.key) &&
+        !e.ctrlKey &&
+        !e.metaKey
+      ) {
         e.preventDefault();
         return;
       }
 
       // Handle backspace/delete within chips - remove the entire chip
-      if (e.key === 'Backspace' || e.key === 'Delete') {
+      if (e.key === "Backspace" || e.key === "Delete") {
         e.preventDefault();
         let chipElement: Element | null = null;
 
         if (range?.commonAncestorContainer?.parentNode instanceof HTMLElement) {
-          chipElement = range.commonAncestorContainer.parentNode.closest('.inline-file-reference');
+          chipElement = range.commonAncestorContainer.parentNode.closest(
+            ".inline-file-reference",
+          );
         }
-        if (!chipElement && range?.startContainer?.parentNode instanceof HTMLElement) {
-          chipElement = range.startContainer.parentNode.closest('.inline-file-reference');
+        if (
+          !chipElement &&
+          range?.startContainer?.parentNode instanceof HTMLElement
+        ) {
+          chipElement = range.startContainer.parentNode.closest(
+            ".inline-file-reference",
+          );
         }
 
         if (chipElement && inputRef.current) {
           chipElement.remove();
-          handleContentEditableInput({ currentTarget: inputRef.current } as any);
+          handleContentEditableInput({
+            currentTarget: inputRef.current,
+          } as any);
           inputRef.current.focus();
         }
         return;
@@ -706,25 +799,27 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     }
 
     if (showFileAutocomplete && filteredFiles.length > 0) {
-      if (e.key === 'ArrowDown') {
+      if (e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedFileIndex((prev) => (prev + 1) % filteredFiles.length);
         return;
       }
 
-      if (e.key === 'ArrowUp') {
+      if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSelectedFileIndex((prev) => (prev - 1 + filteredFiles.length) % filteredFiles.length);
+        setSelectedFileIndex(
+          (prev) => (prev - 1 + filteredFiles.length) % filteredFiles.length,
+        );
         return;
       }
 
-      if (e.key === 'Enter' || e.key === 'Tab') {
+      if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
         handleFileSelect(filteredFiles[selectedFileIndex].path);
         return;
       }
 
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.preventDefault();
         setShowFileAutocomplete(false);
         return;
@@ -777,19 +872,44 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                 <span className="nav-brand-text">CUGA Agent</span>
               </div>
               <nav className="nav-links">
-                <a href="https://docs.cuga.dev" target="_blank" rel="noopener noreferrer" className="nav-link">
+                <a
+                  href="https://docs.cuga.dev"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="nav-link"
+                >
                   Docs
                 </a>
-                <a href="https://cuga.dev" target="_blank" rel="noopener noreferrer" className="nav-link">
+                <a
+                  href="https://cuga.dev"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="nav-link"
+                >
                   Site
                 </a>
-                <a href="https://github.com/cuga-project/cuga-agent" target="_blank" rel="noopener noreferrer" className="nav-link">
+                <a
+                  href="https://github.com/cuga-project/cuga-agent"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="nav-link"
+                >
                   GitHub
                 </a>
-                <a href="https://discord.gg/UhNVTggG" target="_blank" rel="noopener noreferrer" className="nav-link">
+                <a
+                  href="https://discord.gg/UhNVTggG"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="nav-link"
+                >
                   Community
                 </a>
-                <a href="https://github.com/cuga-project/cuga-agent/issues/new" target="_blank" rel="noopener noreferrer" className="nav-link nav-link-feedback">
+                <a
+                  href="https://github.com/cuga-project/cuga-agent/issues/new"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="nav-link nav-link-feedback"
+                >
                   Give Feedback
                 </a>
               </nav>
@@ -798,79 +918,97 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
 
           <div className="welcome-top-section">
             <div className="welcome-left-column">
-            <div className="welcome-content">
-              <div className="welcome-header">
-                <h1 className="welcome-title">Experience CUGA Agent</h1>
-                <p className="mission-text">
-                  Intelligent task automation through multi-agent orchestration, API integration, and code generation on enterprise demo applications.
-                </p>
-              </div>
-
-              <div className="demo-apps-section">
-                <div className="section-header">
-                  <h2 className="section-title">Connected Apps and Tools for This Demo</h2>
+              <div className="welcome-content">
+                <div className="welcome-header">
+                  <h1 className="welcome-title">Experience CUGA Agent</h1>
+                  <p className="mission-text">
+                    Intelligent task automation through multi-agent
+                    orchestration, API integration, and code generation on
+                    enterprise demo applications.
+                  </p>
                 </div>
 
-                <div className="demo-apps-grid">
-                  <div className="demo-app-card crm-card">
-                    <div className="demo-app-icon">
-                      <Database size={32} />
-                    </div>
-                    <div className="demo-app-card-content">
-                      <h3 className="demo-app-name">CRM System</h3>
-                      <p className="demo-app-tools">20 Tools Available</p>
-                      <div className="demo-app-examples">
-                        <span className="demo-app-tag">Get Accounts</span>
-                        <span className="demo-app-tag">Get Contacts</span>
-                        <span className="demo-app-tag">Get Leads</span>
-                        <span className="demo-app-tag">+17 more</span>
-                      </div>
-                      <p className="demo-app-description">
-                        Manage customers, accounts, contacts, and deals with full CRUD operations
-                      </p>
-                    </div>
+                <div className="demo-apps-section">
+                  <div className="section-header">
+                    <h2 className="section-title">
+                      Connected Apps and Tools for This Demo
+                    </h2>
                   </div>
 
-                  <div className="demo-app-card filesystem-card filesystem-card-expanded">
-                    <div className="demo-app-icon">
-                      <FileText size={32} />
-                    </div>
-                    <div className="demo-app-card-content">
-                      <h3 className="demo-app-name">Workspace Files</h3>
-                      <p className="demo-app-tools">File Management</p>
-                      <div className="demo-app-examples">
-                        <span className="demo-app-tag">Read File</span>
+                  <div className="demo-apps-grid">
+                    <div className="demo-app-card crm-card">
+                      <div className="demo-app-icon">
+                        <Database size={32} />
                       </div>
-                      <p className="demo-app-description">
-                        Read files from the cuga_workspace directory
-                      </p>
-                      
-                      <div className="workspace-files-preview">
-                        <div className="workspace-file-item">
-                          <div 
-                            className="workspace-file-header clickable"
-                            onClick={() => toggleFileExpand('contacts.txt')}
-                          >
-                            <ChevronRight 
-                              size={14} 
-                              className={`workspace-file-chevron ${expandedFiles.has('contacts.txt') ? 'expanded' : ''}`}
-                            />
-                            <FileText size={14} />
-                            <span className="workspace-file-name">contacts.txt</span>
-                            <span className="workspace-file-badge">7 contacts</span>
-                          </div>
-                          {expandedFiles.has('contacts.txt') && (
-                            <div className="workspace-file-content">
-                              <code>sarah.bell@gammadeltainc.partners.org</code>
-                              <code>sharon.jimenez@upsiloncorp.innovation.org</code>
-                              <code>ruth.ross@sigmasystems.operations.com</code>
-                              <span className="workspace-file-more">+4 more...</span>
-                            </div>
-                          )}
+                      <div className="demo-app-card-content">
+                        <h3 className="demo-app-name">CRM System</h3>
+                        <p className="demo-app-tools">20 Tools Available</p>
+                        <div className="demo-app-examples">
+                          <span className="demo-app-tag">Get Accounts</span>
+                          <span className="demo-app-tag">Get Contacts</span>
+                          <span className="demo-app-tag">Get Leads</span>
+                          <span className="demo-app-tag">+17 more</span>
                         </div>
-                        
-                        <div className="workspace-files-more">
-                          and 3 more files...
+                        <p className="demo-app-description">
+                          Manage customers, accounts, contacts, and deals with
+                          full CRUD operations
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="demo-app-card filesystem-card filesystem-card-expanded">
+                      <div className="demo-app-icon">
+                        <FileText size={32} />
+                      </div>
+                      <div className="demo-app-card-content">
+                        <h3 className="demo-app-name">Workspace Files</h3>
+                        <p className="demo-app-tools">File Management</p>
+                        <div className="demo-app-examples">
+                          <span className="demo-app-tag">Read File</span>
+                        </div>
+                        <p className="demo-app-description">
+                          Read files from the cuga_workspace directory
+                        </p>
+
+                        <div className="workspace-files-preview">
+                          <div className="workspace-file-item">
+                            <div
+                              className="workspace-file-header clickable"
+                              onClick={() => toggleFileExpand("contacts.txt")}
+                            >
+                              <ChevronRight
+                                size={14}
+                                className={`workspace-file-chevron ${expandedFiles.has("contacts.txt") ? "expanded" : ""}`}
+                              />
+                              <FileText size={14} />
+                              <span className="workspace-file-name">
+                                contacts.txt
+                              </span>
+                              <span className="workspace-file-badge">
+                                7 contacts
+                              </span>
+                            </div>
+                            {expandedFiles.has("contacts.txt") && (
+                              <div className="workspace-file-content">
+                                <code>
+                                  sarah.bell@gammadeltainc.partners.org
+                                </code>
+                                <code>
+                                  sharon.jimenez@upsiloncorp.innovation.org
+                                </code>
+                                <code>
+                                  ruth.ross@sigmasystems.operations.com
+                                </code>
+                                <span className="workspace-file-more">
+                                  +4 more...
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="workspace-files-more">
+                            and 3 more files...
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -878,11 +1016,10 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="welcome-right-column">
-            <div className="get-started-container">
-              <div className="github-section-right">
+            <div className="welcome-right-column">
+              <div className="get-started-container">
+                <div className="github-section-right">
                   <a
                     href="https://github.com/cuga-project/cuga-agent"
                     target="_blank"
@@ -891,86 +1028,95 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                   >
                     🌟 Star us on GitHub
                   </a>
-              </div>
-
-              <div className="get-started-section">
-                <div className="section-header">
-                  <h2 className="section-title">Get Started</h2>
-                  <p className="section-subtitle">Try one of these examples or type your own request</p>
                 </div>
 
-                {showExampleUtterances && !inputValue.trim() && (
-                  <div className="example-utterances-widget">
-                    <div className="example-utterances-list">
-                      {exampleUtterances.map((utterance, index) => (
-                        <button
-                          key={index}
-                          className="example-utterance-chip"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            handleExampleClick(utterance.text);
-                          }}
-                          type="button"
-                        >
-                          <div className="example-utterance-text">{utterance.text}</div>
-                          <div className="example-utterance-reason">{utterance.reason}</div>
-                        </button>
-                      ))}
-                    </div>
+                <div className="get-started-section">
+                  <div className="section-header">
+                    <h2 className="section-title">Get Started</h2>
+                    <p className="section-subtitle">
+                      Try one of these examples or type your own request
+                    </p>
                   </div>
-                )}
-              </div>
 
-              <div className="welcome-input-wrapper">
-                {!effectiveHasStartedChat && (
-                  <div className="welcome-logo input-logo">
-                    <img
-                      src="https://avatars.githubusercontent.com/u/230847519?s=100&v=4"
-                      alt="CUGA Logo"
-                      className="welcome-logo-image"
-                    />
+                  {showExampleUtterances && !inputValue.trim() && (
+                    <div className="example-utterances-widget">
+                      <div className="example-utterances-list">
+                        {exampleUtterances.map((utterance, index) => (
+                          <button
+                            key={index}
+                            className="example-utterance-chip"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleExampleClick(utterance.text);
+                            }}
+                            type="button"
+                          >
+                            <div className="example-utterance-text">
+                              {utterance.text}
+                            </div>
+                            <div className="example-utterance-reason">
+                              {utterance.reason}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="welcome-input-wrapper">
+                  {!effectiveHasStartedChat && (
+                    <div className="welcome-logo input-logo">
+                      <img
+                        src="https://avatars.githubusercontent.com/u/230847519?s=100&v=4"
+                        alt="CUGA Logo"
+                        className="welcome-logo-image"
+                      />
+                    </div>
+                  )}
+                  <div className="chat-input-container-welcome">
+                    <div className="textarea-wrapper">
+                      <div
+                        ref={inputRef}
+                        id="main-input_field"
+                        className="chat-input"
+                        contentEditable={!isProcessing}
+                        onInput={handleContentEditableInput}
+                        onClick={handleContentEditableClick}
+                        onKeyDown={handleKeyPress}
+                        onPaste={handlePaste}
+                        onFocus={handleInputFocus}
+                        onBlur={handleInputBlur}
+                        data-placeholder="Type your message... (@ for files, Shift+Enter for new line)"
+                        style={{
+                          minHeight: "44px",
+                          maxHeight: "120px",
+                          overflowY: "auto",
+                        }}
+                      />
+                    </div>
+                    <StopButton location="inline" />
+                    <button
+                      className="chat-send-btn"
+                      onClick={handleSend}
+                      disabled={!inputValue.trim() || isProcessing}
+                      title="Send message"
+                    >
+                      <Send size={18} />
+                    </button>
                   </div>
-                )}
-                <div className="chat-input-container-welcome">
-                  <div className="textarea-wrapper">
-                    <div
-                      ref={inputRef}
-                      id="main-input_field"
-                      className="chat-input"
-                      contentEditable={!isProcessing}
-                      onInput={handleContentEditableInput}
-                      onClick={handleContentEditableClick}
-                      onKeyDown={handleKeyPress}
-                      onPaste={handlePaste}
-                      onFocus={handleInputFocus}
-                      onBlur={handleInputBlur}
-                      data-placeholder="Type your message... (@ for files, Shift+Enter for new line)"
-                      style={{
-                        minHeight: "44px",
-                        maxHeight: "120px",
-                        overflowY: "auto",
-                      }}
-                    />
-                  </div>
-                  <StopButton location="inline" />
-                  <button
-                    className="chat-send-btn"
-                    onClick={handleSend}
-                    disabled={!inputValue.trim() || isProcessing}
-                    title="Send message"
-                  >
-                    <Send size={18} />
-                  </button>
                 </div>
               </div>
             </div>
-          </div>
           </div>
 
           <div className="welcome-features-section">
             <div className="section-header">
               <h2 className="section-title">Key Capabilities</h2>
-              <p className="section-subtitle">Powerful features that make CUGA an intelligent automation platform</p>
+              <p className="section-subtitle">
+                Powerful features that make CUGA an intelligent automation
+                platform
+              </p>
             </div>
 
             <div className="welcome-features">
@@ -979,7 +1125,10 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                   <Bot size={32} />
                 </div>
                 <h3 className="feature-title">Multi-Agent System</h3>
-                <p className="feature-description">CUGA orchestrates specialized agents for planning, coding & execution</p>
+                <p className="feature-description">
+                  CUGA orchestrates specialized agents for planning, coding &
+                  execution
+                </p>
               </div>
 
               <div className="feature-card">
@@ -987,7 +1136,9 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                   <Terminal size={32} />
                 </div>
                 <h3 className="feature-title">Code Execution</h3>
-                <p className="feature-description">CUGA writes and runs Python code in secure sandbox</p>
+                <p className="feature-description">
+                  CUGA writes and runs Python code in secure sandbox
+                </p>
               </div>
 
               <div className="feature-card">
@@ -995,7 +1146,9 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                   <Code size={32} />
                 </div>
                 <h3 className="feature-title">API Integration</h3>
-                <p className="feature-description">Users can connect any OpenAPI or MCP server instantly</p>
+                <p className="feature-description">
+                  Users can connect any OpenAPI or MCP server instantly
+                </p>
               </div>
 
               <div className="feature-card">
@@ -1003,7 +1156,10 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                   <Database size={32} />
                 </div>
                 <h3 className="feature-title">Human in the Loop</h3>
-                <p className="feature-description">Users can ask followup questions on variables in memory and previous conversations</p>
+                <p className="feature-description">
+                  Users can ask followup questions on variables in memory and
+                  previous conversations
+                </p>
               </div>
 
               <div className="feature-card">
@@ -1011,7 +1167,10 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                   <Cpu size={32} />
                 </div>
                 <h3 className="feature-title">Model Flexibility</h3>
-                <p className="feature-description">CUGA works with small models and open source models like GPT OSS 120B and Llama 4</p>
+                <p className="feature-description">
+                  CUGA works with small models and open source models like GPT
+                  OSS 120B and Llama 4
+                </p>
               </div>
 
               <div className="feature-card">
@@ -1019,7 +1178,9 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                   <Globe size={32} />
                 </div>
                 <h3 className="feature-title">Web & API Tasks</h3>
-                <p className="feature-description">CUGA executes both web and API tasks seamlessly</p>
+                <p className="feature-description">
+                  CUGA executes both web and API tasks seamlessly
+                </p>
               </div>
 
               <div className="feature-card">
@@ -1027,7 +1188,9 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                   <Settings size={32} />
                 </div>
                 <h3 className="feature-title">Reasoning Modes</h3>
-                <p className="feature-description">Users can configure reasoning modes: lite, balanced</p>
+                <p className="feature-description">
+                  Users can configure reasoning modes: lite, balanced
+                </p>
               </div>
             </div>
           </div>
@@ -1037,7 +1200,9 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
           {messages.length === 0 && (
             <div className="chat-empty-state">
               <p className="chat-empty-state-title">No messages yet</p>
-              <p className="chat-empty-state-hint">Send a message below to start the conversation.</p>
+              <p className="chat-empty-state-hint">
+                Send a message below to start the conversation.
+              </p>
             </div>
           )}
           {messages.map((message) => (
@@ -1049,8 +1214,8 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                 {message.isUser ? (
                   <User size={18} />
                 ) : (
-                  <img 
-                    src="https://avatars.githubusercontent.com/u/230847519?s=48&v=4" 
+                  <img
+                    src="https://avatars.githubusercontent.com/u/230847519?s=48&v=4"
                     alt="Bot Avatar"
                     className="bot-avatar-image"
                   />
@@ -1058,8 +1223,8 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
               </div>
               {message.isCardResponse && message.chatInstance ? (
                 <div className="message-content message-card-content">
-                  <CardManager 
-                    chatInstance={message.chatInstance as any} 
+                  <CardManager
+                    chatInstance={message.chatInstance as any}
                     threadId={threadIdRef.current || threadId}
                     useDraftAgent={useDraftAgent}
                   />
@@ -1067,7 +1232,9 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
               ) : (
                 <div
                   className="message-content"
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(message.text) }}
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeHtml(message.text),
+                  }}
                 />
               )}
             </div>
@@ -1099,36 +1266,36 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
               </div>
             )}
             <div className="chat-input-container-chat">
-            <div className="textarea-wrapper">
-              <div
-                ref={inputRef}
-                id="main-input_field"
-                className="chat-input"
-                contentEditable={!isProcessing}
-                onInput={handleContentEditableInput}
-                onClick={handleContentEditableClick}
-                onKeyDown={handleKeyPress}
-                onPaste={handlePaste}
-                onFocus={handleInputFocus}
-                onBlur={handleInputBlur}
-                data-placeholder="Type your message... (@ for files, Shift+Enter for new line)"
-                style={{
-                  minHeight: "44px",
-                  maxHeight: "120px",
-                  overflowY: "auto",
-                }}
-              />
+              <div className="textarea-wrapper">
+                <div
+                  ref={inputRef}
+                  id="main-input_field"
+                  className="chat-input"
+                  contentEditable={!isProcessing}
+                  onInput={handleContentEditableInput}
+                  onClick={handleContentEditableClick}
+                  onKeyDown={handleKeyPress}
+                  onPaste={handlePaste}
+                  onFocus={handleInputFocus}
+                  onBlur={handleInputBlur}
+                  data-placeholder="Type your message... (@ for files, Shift+Enter for new line)"
+                  style={{
+                    minHeight: "44px",
+                    maxHeight: "120px",
+                    overflowY: "auto",
+                  }}
+                />
+              </div>
+              <StopButton location="inline" />
+              <button
+                className="chat-send-btn"
+                onClick={handleSend}
+                disabled={!inputValue.trim() || isProcessing}
+                title="Send message"
+              >
+                <Send size={18} />
+              </button>
             </div>
-            <StopButton location="inline" />
-            <button
-              className="chat-send-btn"
-              onClick={handleSend}
-              disabled={!inputValue.trim() || isProcessing}
-              title="Send message"
-            >
-              <Send size={18} />
-            </button>
-          </div>
           </div>
 
           {showFileAutocomplete && filteredFiles.length > 0 && (
@@ -1141,7 +1308,7 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                 {filteredFiles.map((file, index) => (
                   <div
                     key={file.path}
-                    className={`simple-file-autocomplete-item ${index === selectedFileIndex ? 'selected' : ''}`}
+                    className={`simple-file-autocomplete-item ${index === selectedFileIndex ? "selected" : ""}`}
                     onClick={() => handleFileSelect(file.path)}
                     onMouseEnter={() => {
                       setSelectedFileIndex(index);
@@ -1158,7 +1325,9 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                 ))}
               </div>
               <div className="simple-file-autocomplete-footer">
-                <span className="hint">↑↓ navigate • Enter/Tab select • Esc close</span>
+                <span className="hint">
+                  ↑↓ navigate • Enter/Tab select • Esc close
+                </span>
               </div>
             </div>
           )}
@@ -1168,7 +1337,10 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
             <div className="welcome-features-section">
               <div className="section-header">
                 <h2 className="section-title">Key Capabilities</h2>
-                <p className="section-subtitle">Powerful features that make CUGA an intelligent automation platform</p>
+                <p className="section-subtitle">
+                  Powerful features that make CUGA an intelligent automation
+                  platform
+                </p>
               </div>
 
               <div className="welcome-features">
@@ -1177,7 +1349,10 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                     <Bot size={32} />
                   </div>
                   <h3 className="feature-title">Multi-Agent System</h3>
-                  <p className="feature-description">CUGA orchestrates specialized agents for planning, coding & execution</p>
+                  <p className="feature-description">
+                    CUGA orchestrates specialized agents for planning, coding &
+                    execution
+                  </p>
                 </div>
 
                 <div className="feature-card">
@@ -1185,7 +1360,9 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                     <Terminal size={32} />
                   </div>
                   <h3 className="feature-title">Code Execution</h3>
-                  <p className="feature-description">CUGA writes and runs Python code in secure sandbox</p>
+                  <p className="feature-description">
+                    CUGA writes and runs Python code in secure sandbox
+                  </p>
                 </div>
 
                 <div className="feature-card">
@@ -1193,7 +1370,9 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                     <Code size={32} />
                   </div>
                   <h3 className="feature-title">API Integration</h3>
-                  <p className="feature-description">Users can connect any OpenAPI or MCP server instantly</p>
+                  <p className="feature-description">
+                    Users can connect any OpenAPI or MCP server instantly
+                  </p>
                 </div>
 
                 <div className="feature-card">
@@ -1201,7 +1380,9 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
                     <Database size={32} />
                   </div>
                   <h3 className="feature-title">Smart Memory</h3>
-                  <p className="feature-description">CUGA tracks variables and data across conversations</p>
+                  <p className="feature-description">
+                    CUGA tracks variables and data across conversations
+                  </p>
                 </div>
               </div>
             </div>
@@ -1212,4 +1393,3 @@ export function CustomChat({ onVariablesUpdate, onFileAutocompleteOpen, onFileHo
     </div>
   );
 }
-

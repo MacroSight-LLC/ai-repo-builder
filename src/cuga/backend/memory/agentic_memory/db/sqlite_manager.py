@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import logging
 import os
@@ -31,7 +33,7 @@ sqlite3.register_converter("timestamp", convert_timestamp)
 class SQLiteManager:
     """A database for any resources that can't be generalized across backends."""
 
-    def __init__(self, db_path: str = os.path.join(DBS_DIR, 'agentic.db')):
+    def __init__(self, db_path: str = os.path.join(DBS_DIR, "agentic.db")):
         self.db_path = db_path
 
     def _create_namespace_table(self):
@@ -63,7 +65,7 @@ class SQLiteManager:
                         id           TEXT NOT NULL,
                         created_at   TIMESTAMP NOT NULL,
                         ended        BOOLEAN NOT NULL,
-                        
+
                         PRIMARY KEY (namespace_id, id),
                         FOREIGN KEY (namespace_id) REFERENCES namespaces (id)
                     )
@@ -81,7 +83,7 @@ class SQLiteManager:
         agent_id: str | None = None,
         app_id: str | None = None,
     ) -> Namespace:
-        created_at = datetime.datetime.now(datetime.timezone.utc)
+        created_at = datetime.datetime.now(datetime.UTC)
         with self._lock:
             try:
                 self.connection.execute("BEGIN")
@@ -102,7 +104,9 @@ class SQLiteManager:
                 )
                 self.connection.execute("COMMIT")
             except sqlite3.IntegrityError as e:
-                raise NamespaceAlreadyExistsException(f'Namespace "{namespace_id}" already exists.') from e
+                raise NamespaceAlreadyExistsException(
+                    f'Namespace "{namespace_id}" already exists.'
+                ) from e
             except Exception as e:
                 self.connection.execute("ROLLBACK")
                 logger.error(f"Failed to create namespace: {e}")
@@ -120,7 +124,7 @@ class SQLiteManager:
         namespace_id: str,
         run_id: str,
     ) -> Run:
-        created_at = datetime.datetime.now(datetime.timezone.utc)
+        created_at = datetime.datetime.now(datetime.UTC)
         with self._lock:
             try:
                 self.connection.execute("BEGIN")
@@ -202,7 +206,7 @@ class SQLiteManager:
             for k, v in {"user_id": user_id, "agent_id": agent_id, "app_id": app_id}.items()
             if v is not None
         }
-        sql = ' AND '.join([f"{k} = ?" for k in query])
+        sql = " AND ".join([f"{k} = ?" for k in query])
         params = list(query.values()) + [limit]
         with self._lock:
             cursor: sqlite3.Cursor = self.connection.cursor()
@@ -230,34 +234,49 @@ class SQLiteManager:
 
     def end_run(self, namespace_id: str, run_id: str):
         with self._lock:
-            self.connection.execute("BEGIN")
-            self.connection.execute(
-                "UPDATE runs SET ended = ? WHERE namespace_id = ? AND id = ?",
-                (
-                    True,
-                    namespace_id,
-                    run_id,
-                ),
-            )
-            self.connection.execute("COMMIT")
+            try:
+                self.connection.execute("BEGIN")
+                self.connection.execute(
+                    "UPDATE runs SET ended = ? WHERE namespace_id = ? AND id = ?",
+                    (
+                        True,
+                        namespace_id,
+                        run_id,
+                    ),
+                )
+                self.connection.execute("COMMIT")
+            except Exception as e:
+                self.connection.execute("ROLLBACK")
+                logger.error(f"Failed to end run {run_id}: {e}")
+                raise
 
     def delete_namespace(self, namespace_id: str):
         with self._lock:
-            self.connection.execute("BEGIN")
-            self.connection.execute("DELETE FROM namespaces WHERE id = ?", (namespace_id,))
-            self.connection.execute("COMMIT")
+            try:
+                self.connection.execute("BEGIN")
+                self.connection.execute("DELETE FROM namespaces WHERE id = ?", (namespace_id,))
+                self.connection.execute("COMMIT")
+            except Exception as e:
+                self.connection.execute("ROLLBACK")
+                logger.error(f"Failed to delete namespace {namespace_id}: {e}")
+                raise
 
     def delete_run(self, namespace_id: str, run_id: str):
         with self._lock:
-            self.connection.execute("BEGIN")
-            self.connection.execute(
-                "DELETE FROM runs WHERE namespace_id = ? AND id = ?",
-                (
-                    namespace_id,
-                    run_id,
-                ),
-            )
-            self.connection.execute("COMMIT")
+            try:
+                self.connection.execute("BEGIN")
+                self.connection.execute(
+                    "DELETE FROM runs WHERE namespace_id = ? AND id = ?",
+                    (
+                        namespace_id,
+                        run_id,
+                    ),
+                )
+                self.connection.execute("COMMIT")
+            except Exception as e:
+                self.connection.execute("ROLLBACK")
+                logger.error(f"Failed to delete run {run_id}: {e}")
+                raise
 
     def reset(self) -> None:
         """Drop and recreate every table."""

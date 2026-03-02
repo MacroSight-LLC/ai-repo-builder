@@ -1,14 +1,17 @@
-import threading
-from datetime import date
-from typing import Dict, Any, Optional
+from __future__ import annotations
+
+import copy
 import hashlib
 import json
 import os
+import threading
+from datetime import date
+from typing import Any
 
 import httpx
-from langchain_openai import ChatOpenAI, AzureChatOpenAI
-from langchain_ibm import ChatWatsonx
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_ibm import ChatWatsonx
+from langchain_openai import AzureChatOpenAI, ChatOpenAI
 from loguru import logger
 
 try:
@@ -46,8 +49,8 @@ class LLMManager:
 
     def __init__(self):
         if not self._initialized:
-            self._models: Dict[str, Any] = {}
-            self._pre_instantiated_model: Optional[BaseChatModel] = None
+            self._models: dict[str, Any] = {}
+            self._pre_instantiated_model: BaseChatModel | None = None
             self._initialized = True
 
     def convert_dates_to_strings(self, obj):
@@ -77,57 +80,64 @@ class LLMManager:
         model: BaseChatModel,
         temperature: float = 0.1,
         max_tokens: int = 1000,
-        max_completion_tokens: Optional[int] = None,
+        max_completion_tokens: int | None = None,
     ) -> BaseChatModel:
-        """Update model parameters (temperature, max_tokens, and max_completion_tokens) for the task
+        """Return a copy of the model with updated parameters.
+
+        Creates a deep copy so the cached original is never mutated,
+        preventing race conditions when concurrent requests need different
+        parameter values.
 
         Args:
-            model: The model to update
+            model: The model to copy and update
             temperature: Temperature setting (default: 0.1)
             max_tokens: Maximum tokens for the task
             max_completion_tokens: Maximum completion tokens for the task (defaults to max_tokens if not provided)
 
         Returns:
-            Updated model with new parameters
+            New model instance with updated parameters
         """
+        model = copy.deepcopy(model)
         model_kwargs = {}
-        if hasattr(model, 'model_kwargs') and model.model_kwargs is not None:
+        if hasattr(model, "model_kwargs") and model.model_kwargs is not None:
             model_kwargs = model.model_kwargs.copy()
 
         # Check if this is a reasoning model
-        model_name = getattr(model, 'model_name', '') or getattr(model, 'model', '')
+        model_name = getattr(model, "model_name", "") or getattr(model, "model", "")
         is_reasoning = self._is_reasoning_model(model_name)
 
         # Update temperature only for non-reasoning models
         if not is_reasoning:
-            if hasattr(model, 'temperature'):
+            if hasattr(model, "temperature"):
                 logger.debug(f"Updating model temperature: {temperature}")
-                if hasattr(model, 'model_kwargs') and model.model_kwargs is not None:
+                if hasattr(model, "model_kwargs") and model.model_kwargs is not None:
                     logger.debug(f"Model keys: {model.model_kwargs.keys()}")
                 logger.debug(f"Model instance: {type(model)}")
                 model.temperature = temperature
-            elif 'temperature' in model_kwargs:
-                model_kwargs['temperature'] = temperature
+            elif "temperature" in model_kwargs:
+                model_kwargs["temperature"] = temperature
         else:
             logger.debug(f"Skipping temperature update for reasoning model: {model_name}")
 
         # Set max_completion_tokens (defaults to max_tokens if not provided)
-        completion_tokens = max_completion_tokens if max_completion_tokens is not None else max_tokens
+        completion_tokens = (
+            max_completion_tokens if max_completion_tokens is not None else max_tokens
+        )
 
         # Update max_tokens
-        if hasattr(model, 'max_tokens'):
+        if hasattr(model, "max_tokens"):
             model.max_tokens = max_tokens
-        elif 'max_tokens' in model_kwargs:
-            model_kwargs['max_tokens'] = max_tokens
+        elif "max_tokens" in model_kwargs:
+            model_kwargs["max_tokens"] = max_tokens
 
         # Update max_completion_tokens
-        if hasattr(model, 'max_completion_tokens'):
+        if hasattr(model, "max_completion_tokens"):
             model.max_completion_tokens = completion_tokens
-        elif 'max_completion_tokens' in model_kwargs:
-            model_kwargs['max_completion_tokens'] = completion_tokens
+        elif "max_completion_tokens" in model_kwargs:
+            model_kwargs["max_completion_tokens"] = completion_tokens
 
         # Update model_kwargs if it exists
-        if hasattr(model, 'model_kwargs') and model.model_kwargs is not None:
+        if hasattr(model, "model_kwargs") and model.model_kwargs is not None:
             model.model_kwargs = model_kwargs
 
         logger.debug(
@@ -140,7 +150,7 @@ class LLMManager:
         self._pre_instantiated_model = None
         logger.info("Pre-instantiated model cleared, returning to normal model creation")
 
-    def _create_cache_key(self, model_settings: Dict[str, Any]) -> str:
+    def _create_cache_key(self, model_settings: dict[str, Any]) -> str:
         """Create a unique cache key from model settings including resolved values"""
         # Sort settings to ensure consistent hashing
         d = self.convert_dates_to_strings(model_settings.to_dict())
@@ -150,23 +160,23 @@ class LLMManager:
             del d[key]
 
         # Add resolved values to ensure cache key reflects actual configuration
-        platform = model_settings.get('platform')
+        platform = model_settings.get("platform")
         if platform:
-            d['resolved_model_name'] = self._get_model_name(model_settings, platform)
-            d['resolved_api_version'] = self._get_api_version(model_settings, platform)
-            d['resolved_base_url'] = self._get_base_url(model_settings, platform)
+            d["resolved_model_name"] = self._get_model_name(model_settings, platform)
+            d["resolved_api_version"] = self._get_api_version(model_settings, platform)
+            d["resolved_base_url"] = self._get_base_url(model_settings, platform)
 
         settings_str = json.dumps(d, sort_keys=True)
         return hashlib.md5(settings_str.encode()).hexdigest()
 
-    def _get_model_name(self, model_settings: Dict[str, Any], platform: str) -> str:
+    def _get_model_name(self, model_settings: dict[str, Any], platform: str) -> str:
         """Get model name with environment variable override support"""
         # Check if model_name is defined in TOML settings
-        toml_model_name = model_settings.get('model_name')
+        toml_model_name = model_settings.get("model_name")
 
         if platform == "openai":
             # For OpenAI, check environment variables
-            env_model_name = os.environ.get('MODEL_NAME')
+            env_model_name = os.environ.get("MODEL_NAME")
             if env_model_name:
                 logger.info(f"Using MODEL_NAME from environment: {env_model_name}")
                 return env_model_name
@@ -180,7 +190,7 @@ class LLMManager:
                 return default_model
         elif platform == "groq":
             # For Groq, check environment variables
-            env_model_name = os.environ.get('MODEL_NAME')
+            env_model_name = os.environ.get("MODEL_NAME")
             if env_model_name:
                 logger.info(f"Using MODEL_NAME from environment for Groq: {env_model_name}")
                 return env_model_name
@@ -194,7 +204,7 @@ class LLMManager:
                 return default_model
         elif platform == "watsonx":
             # For WatsonX, check environment variables
-            env_model_name = os.environ.get('MODEL_NAME')
+            env_model_name = os.environ.get("MODEL_NAME")
             if env_model_name:
                 logger.info(f"Using MODEL_NAME from environment for WatsonX: {env_model_name}")
                 return env_model_name
@@ -208,7 +218,7 @@ class LLMManager:
                 return default_model
         elif platform == "azure":
             # For Azure, check environment variables
-            env_model_name = os.environ.get('MODEL_NAME')
+            env_model_name = os.environ.get("MODEL_NAME")
             if env_model_name:
                 logger.info(f"Using MODEL_NAME from environment for Azure: {env_model_name}")
                 return env_model_name
@@ -222,7 +232,7 @@ class LLMManager:
                 return default_model
         elif platform == "google-genai":
             # For Google GenAI, check environment variables
-            env_model_name = os.environ.get('MODEL_NAME')
+            env_model_name = os.environ.get("MODEL_NAME")
             if env_model_name:
                 logger.info(f"Using MODEL_NAME from environment for Google GenAI: {env_model_name}")
                 return env_model_name
@@ -232,10 +242,12 @@ class LLMManager:
             else:
                 # Default fallback for Google GenAI
                 default_model = "gemini-1.5-pro"
-                logger.info(f"No model_name specified for Google GenAI, using default: {default_model}")
+                logger.info(
+                    f"No model_name specified for Google GenAI, using default: {default_model}"
+                )
                 return default_model
         elif platform == "openrouter":
-            env_model_name = os.environ.get('MODEL_NAME')
+            env_model_name = os.environ.get("MODEL_NAME")
             if env_model_name:
                 logger.info(f"Using MODEL_NAME from environment for OpenRouter: {env_model_name}")
                 return env_model_name
@@ -244,10 +256,12 @@ class LLMManager:
                 return toml_model_name
             else:
                 default_model = "anthropic/claude-3.5-sonnet"
-                logger.info(f"No model_name specified for OpenRouter, using default: {default_model}")
+                logger.info(
+                    f"No model_name specified for OpenRouter, using default: {default_model}"
+                )
                 return default_model
         elif platform == "litellm":
-            env_model_name = os.environ.get('MODEL_NAME')
+            env_model_name = os.environ.get("MODEL_NAME")
             if env_model_name:
                 logger.info(f"Using MODEL_NAME from environment for LiteLLM: {env_model_name}")
                 return env_model_name
@@ -265,19 +279,19 @@ class LLMManager:
             else:
                 raise ValueError(f"model_name must be specified for platform: {platform}")
 
-    def _get_api_version(self, model_settings: Dict[str, Any], platform: str) -> str:
+    def _get_api_version(self, model_settings: dict[str, Any], platform: str) -> str:
         """Get API version with environment variable override support"""
         if platform == "litellm":
             return ""
         if platform == "openai":
             # Check environment variable first
-            env_api_version = os.environ.get('OPENAI_API_VERSION')
+            env_api_version = os.environ.get("OPENAI_API_VERSION")
             if env_api_version:
                 logger.info(f"Using OPENAI_API_VERSION from environment: {env_api_version}")
                 return env_api_version
 
             # Check TOML settings
-            toml_api_version = model_settings.get('api_version')
+            toml_api_version = model_settings.get("api_version")
             if toml_api_version:
                 # Validate if it's a date type and transform to string
                 if isinstance(toml_api_version, date):
@@ -292,14 +306,14 @@ class LLMManager:
             return default_openrouter
         else:
             # For other platforms, use TOML or default
-            api_version = model_settings.get('api_version', "2024-08-06")
+            api_version = model_settings.get("api_version", "2024-08-06")
             # Validate if it's a date type and transform to string
             if isinstance(api_version, date):
                 api_version = api_version.isoformat()
                 logger.debug(f"Converted date to string: {api_version}")
             return api_version
 
-    def _get_auth_headers(self, model_settings: Dict[str, Any], platform: str) -> Dict[str, str]:
+    def _get_auth_headers(self, model_settings: dict[str, Any], platform: str) -> dict[str, str]:
         """Build auth headers for openai platform. Supports Bearer token and custom header-based auth.
 
         Config options:
@@ -312,7 +326,7 @@ class LLMManager:
         if platform != "openai":
             return {}
 
-        headers: Dict[str, str] = {}
+        headers: dict[str, str] = {}
         to_dict = getattr(model_settings, "to_dict", lambda: model_settings)
         d = to_dict() if callable(to_dict) else model_settings
 
@@ -347,17 +361,17 @@ class LLMManager:
 
         return headers
 
-    def _get_base_url(self, model_settings: Dict[str, Any], platform: str) -> str:
+    def _get_base_url(self, model_settings: dict[str, Any], platform: str) -> str:
         """Get base URL with environment variable override support"""
         if platform == "openai":
             # Check environment variable first
-            env_base_url = os.environ.get('OPENAI_BASE_URL')
+            env_base_url = os.environ.get("OPENAI_BASE_URL")
             if env_base_url:
                 logger.info(f"Using OPENAI_BASE_URL from environment: {env_base_url}")
                 return env_base_url
 
             # Check TOML settings (for litellm compatibility)
-            toml_url = model_settings.get('url')
+            toml_url = model_settings.get("url")
             if toml_url:
                 logger.debug(f"Using url from TOML: {toml_url}")
                 return toml_url
@@ -366,13 +380,13 @@ class LLMManager:
             logger.debug("No base URL specified, using OpenAI default endpoint")
             return None
         elif platform == "openrouter":
-            env_base_url = os.environ.get('OPENROUTER_BASE_URL')
+            env_base_url = os.environ.get("OPENROUTER_BASE_URL")
             if env_base_url:
                 logger.info(f"Using OPENROUTER_BASE_URL from environment: {env_base_url}")
                 return env_base_url
 
             # Check TOML settings
-            toml_url = model_settings.get('url')
+            toml_url = model_settings.get("url")
             if toml_url:
                 logger.debug(f"Using url from TOML: {toml_url}")
                 return toml_url
@@ -384,18 +398,18 @@ class LLMManager:
             )
             return default_openrouter
         elif platform == "litellm":
-            env_base_url = os.environ.get('OPENAI_BASE_URL') or os.environ.get('LITELLM_API_BASE')
+            env_base_url = os.environ.get("OPENAI_BASE_URL") or os.environ.get("LITELLM_API_BASE")
             if env_base_url:
                 logger.info(f"Using base URL from environment for LiteLLM: {env_base_url}")
                 return env_base_url
-            toml_url = model_settings.get('url')
+            toml_url = model_settings.get("url")
             if toml_url:
                 logger.debug(f"Using url from TOML: {toml_url}")
                 return toml_url
             return None
         else:
             # For other platforms, use TOML settings
-            return model_settings.get('url')
+            return model_settings.get("url")
 
     def _is_reasoning_model(self, model_name: str) -> bool:
         """Check if model is a reasoning model that doesn't support temperature
@@ -404,25 +418,27 @@ class LLMManager:
         """
         if not model_name:
             return False
-        reasoning_prefixes = ('o1', 'o3', 'gpt-5')
+        reasoning_prefixes = ("o1", "o3", "gpt-5")
         return model_name.startswith(reasoning_prefixes)
 
-    def _create_llm_instance(self, model_settings: Dict[str, Any]):
+    def _create_llm_instance(self, model_settings: dict[str, Any]):
         """Create LLM instance based on platform and settings"""
-        platform = model_settings.get('platform')
-        temperature = model_settings.get('temperature', 0.7)
-        max_tokens = model_settings.get('max_tokens')
+        platform = model_settings.get("platform")
+        temperature = model_settings.get("temperature", 0.7)
+        max_tokens = model_settings.get("max_tokens")
         assert max_tokens is not None, "max_tokens must be specified"
         # Handle environment variable overrides
         model_name = self._get_model_name(model_settings, platform)
         api_version = self._get_api_version(model_settings, platform)
         base_url = self._get_base_url(model_settings, platform)
         if platform == "azure":
-            api_version = str(model_settings.get('api_version'))
+            api_version = str(model_settings.get("api_version"))
             is_reasoning = self._is_reasoning_model(model_name)
 
             if is_reasoning:
-                logger.debug(f"Creating AzureChatOpenAI reasoning model: {model_name} (no temperature)")
+                logger.debug(
+                    f"Creating AzureChatOpenAI reasoning model: {model_name} (no temperature)"
+                )
                 llm = AzureChatOpenAI(
                     model_version=api_version,
                     timeout=61,
@@ -441,7 +457,7 @@ class LLMManager:
         elif platform == "openai":
             is_reasoning = self._is_reasoning_model(model_name)
 
-            openai_params: Dict[str, Any] = {
+            openai_params: dict[str, Any] = {
                 "model_name": model_name,
                 "max_tokens": max_tokens,
                 "timeout": 61,
@@ -464,7 +480,11 @@ class LLMManager:
             if base_url:
                 openai_params["openai_api_base"] = base_url
 
-            ssl_verify = os.environ.get("OPENAI_SSL_VERIFY", "true").lower() not in ("false", "0", "no")
+            ssl_verify = os.environ.get("OPENAI_SSL_VERIFY", "true").lower() not in (
+                "false",
+                "0",
+                "no",
+            )
             if not ssl_verify:
                 openai_params["http_client"] = httpx.Client(verify=False)
                 openai_params["http_async_client"] = httpx.AsyncClient(verify=False)
@@ -482,12 +502,12 @@ class LLMManager:
                 model_id=model_name,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                project_id=os.environ['WATSONX_PROJECT_ID'],
+                project_id=os.environ["WATSONX_PROJECT_ID"],
             )
         elif platform == "rits":
             llm = ChatOpenAI(
-                api_key=os.environ.get(model_settings.get('apikey_name')),
-                base_url=model_settings.get('url'),
+                api_key=os.environ.get(model_settings.get("apikey_name")),
+                base_url=model_settings.get("url"),
                 max_tokens=max_tokens,
                 model=model_name,
                 temperature=temperature,
@@ -526,7 +546,7 @@ class LLMManager:
             if not api_key:
                 raise ValueError("OPENROUTER_API_KEY environment variable not set")
 
-            openrouter_params: Dict[str, Any] = {
+            openrouter_params: dict[str, Any] = {
                 "model_name": model_name,
                 "max_tokens": max_tokens,
                 "timeout": 61,
@@ -552,14 +572,18 @@ class LLMManager:
             llm = ChatOpenAI(**openrouter_params)
         elif platform == "litellm" and ChatLiteLLM is not None:
             logger.debug(f"Creating LiteLLM model: {model_name}")
-            ssl_verify = os.environ.get("OPENAI_SSL_VERIFY", "true").lower() not in ("false", "0", "no")
+            ssl_verify = os.environ.get("OPENAI_SSL_VERIFY", "true").lower() not in (
+                "false",
+                "0",
+                "no",
+            )
             if not ssl_verify:
                 import litellm
 
                 litellm.ssl_verify = False
                 logger.warning("LiteLLM SSL verification disabled via OPENAI_SSL_VERIFY")
 
-            litellm_params: Dict[str, Any] = {
+            litellm_params: dict[str, Any] = {
                 "model": model_name,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
@@ -585,17 +609,19 @@ class LLMManager:
 
         return llm
 
-    def get_model(self, model_settings: Dict[str, Any]):
+    def get_model(self, model_settings: dict[str, Any]):
         """Get or create LLM instance for the given model settings
 
         Args:
             model_settings: Model configuration dictionary (must contain max_tokens)
         """
-        max_tokens = model_settings.get('max_tokens')
+        max_tokens = model_settings.get("max_tokens")
         assert max_tokens is not None, "max_tokens must be specified in model_settings"
         # Check if pre-instantiated model is available
         if self._pre_instantiated_model is not None:
-            logger.debug(f"Using pre-instantiated model: {type(self._pre_instantiated_model).__name__}")
+            logger.debug(
+                f"Using pre-instantiated model: {type(self._pre_instantiated_model).__name__}"
+            )
             # Update parameters for the task
             updated_model = self._update_model_parameters(
                 self._pre_instantiated_model, temperature=0.1, max_tokens=max_tokens
@@ -603,7 +629,7 @@ class LLMManager:
             return updated_model
 
         # Get resolved values for logging and cache key
-        platform = model_settings.get('platform', 'unknown')
+        platform = model_settings.get("platform", "unknown")
         model_name = self._get_model_name(model_settings, platform)
         api_version = self._get_api_version(model_settings, platform)
         base_url = self._get_base_url(model_settings, platform)
@@ -617,7 +643,10 @@ class LLMManager:
             # Update parameters for the task
             cached_model = self._models[cache_key]
             updated_model = self._update_model_parameters(
-                cached_model, temperature=0.1, max_tokens=max_tokens, max_completion_tokens=max_tokens
+                cached_model,
+                temperature=0.1,
+                max_tokens=max_tokens,
+                max_completion_tokens=max_tokens,
             )
             return updated_model
 

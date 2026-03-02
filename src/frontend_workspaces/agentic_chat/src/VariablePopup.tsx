@@ -17,7 +17,7 @@ interface VariablePopupProps {
 const VariablePopup: React.FC<VariablePopupProps> = ({ variable, onClose }) => {
   const handleDownload = () => {
     // Check if variable is a dict type and try to download as JSON
-    if (variable.type === 'dict') {
+    if (variable.type === "dict") {
       try {
         // Attempt to parse the value_preview as JSON
         const jsonData = JSON.parse(variable.value_preview);
@@ -35,7 +35,10 @@ const VariablePopup: React.FC<VariablePopupProps> = ({ variable, onClose }) => {
         return;
       } catch (error) {
         // If JSON parsing fails, fall back to markdown
-        console.warn('Failed to parse dict as JSON, falling back to markdown download:', error);
+        console.warn(
+          "Failed to parse dict as JSON, falling back to markdown download:",
+          error,
+        );
       }
     }
 
@@ -56,20 +59,32 @@ const VariablePopup: React.FC<VariablePopupProps> = ({ variable, onClose }) => {
 
   return (
     <div className="variable-popup-overlay" onClick={onClose}>
-      <div className="variable-popup-content" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="variable-popup-content"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="variable-popup-header">
           <h3>Variable Details</h3>
           <div className="variable-popup-actions">
             <button
               className="variable-popup-download-btn"
               onClick={handleDownload}
-              title={variable.type === 'dict' ? "Download as JSON" : "Download as Markdown"}
+              title={
+                variable.type === "dict"
+                  ? "Download as JSON"
+                  : "Download as Markdown"
+              }
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8.5 1a.5.5 0 0 0-1 0v8.793L5.354 7.646a.5.5 0 1 0-.708.708l3 3a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 9.793V1z"/>
-                <path d="M3 13h10a1 1 0 0 0 1-1v-1.5a.5.5 0 0 0-1 0V12H3v-.5a.5.5 0 0 0-1 0V12a1 1 0 0 0 1 1z"/>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+              >
+                <path d="M8.5 1a.5.5 0 0 0-1 0v8.793L5.354 7.646a.5.5 0 1 0-.708.708l3 3a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 9.793V1z" />
+                <path d="M3 13h10a1 1 0 0 0 1-1v-1.5a.5.5 0 0 0-1 0V12H3v-.5a.5.5 0 0 0-1 0V12a1 1 0 0 0 1 1z" />
               </svg>
-              Download {variable.type === 'dict' ? 'JSON' : 'MD'}
+              Download {variable.type === "dict" ? "JSON" : "MD"}
             </button>
             <button className="variable-popup-close-btn" onClick={onClose}>
               ×
@@ -78,7 +93,9 @@ const VariablePopup: React.FC<VariablePopupProps> = ({ variable, onClose }) => {
         </div>
         <div
           className="variable-popup-body"
-          dangerouslySetInnerHTML={{ __html: sanitizeHtml(marked(formattedContent) as string) }}
+          dangerouslySetInnerHTML={{
+            __html: sanitizeHtml(String(marked(formattedContent))),
+          }}
         />
       </div>
     </div>
@@ -86,4 +103,3 @@ const VariablePopup: React.FC<VariablePopupProps> = ({ variable, onClose }) => {
 };
 
 export default VariablePopup;
-

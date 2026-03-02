@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import os
@@ -5,6 +7,7 @@ import platform
 import re
 import shutil
 import subprocess
+import threading
 import traceback
 import uuid
 from contextlib import asynccontextmanager
@@ -135,6 +138,8 @@ class AppState:
         # Per-thread cancellation events for concurrent user support
         # Using asyncio.Event for thread-safe cancellation signaling
         self.stop_events: dict[str, asyncio.Event] = {}
+        # Lock for os.environ mutations (shared mutable global state)
+        self.env_lock: threading.Lock = threading.Lock()
         self.output_format: OutputFormat = (
             OutputFormat.WXO if settings.advanced_features.wxo_integration else OutputFormat.DEFAULT
         )
@@ -312,11 +317,11 @@ async def lifespan(app: FastAPI):
                         sync_result = await validate_and_sync_policies(
                             app_state.policy_system.storage, app_state.policy_filesystem_sync
                         )
-                        if sync_result["removed"] or sync_result["added_to_filesystem"]:
+                        if sync_result["removed"] or sync_result["added_to_storage"]:
                             logger.info(
                                 f"📊 Sync validation: "
                                 f"removed from storage={sync_result['removed']}, "
-                                f"added to filesystem={sync_result['added_to_filesystem']}"
+                                f"added to storage={sync_result['added_to_storage']}"
                             )
                     except Exception as e:
                         logger.warning(f"Failed to validate and sync policies: {e}")
@@ -565,7 +570,7 @@ def get_element_names(tool_calls, elements):
 async def copy_file_async(file_path, new_name):
     """Asynchronously copies a file to a new name in the same directory."""
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         if not await loop.run_in_executor(None, os.path.isfile, file_path):
             print(f"Error: File '{file_path}' does not exist.")
             return None
@@ -602,7 +607,7 @@ async def validate_and_sync_policies(storage, filesystem_sync):
         storage_policy_ids = {p.id for p in storage_policies}
 
         removed_count = 0
-        added_to_filesystem_count = 0
+        added_to_storage_count = 0
 
         # 1. Remove from storage if deleted from filesystem
         policies_to_remove = storage_policy_ids - fs_policy_ids
@@ -621,20 +626,20 @@ async def validate_and_sync_policies(storage, filesystem_sync):
                 policy = filesystem_sync.load_policy_from_file(policy_id)
                 if policy:
                     await storage.save_policy(policy)
-                    added_to_filesystem_count += 1
+                    added_to_storage_count += 1
                     logger.info(
                         f"💾 Added policy '{policy_id}' to storage (was only on filesystem)"
                     )
             except Exception as e:
-                logger.error(f"Failed to save policy '{policy_id}' to filesystem: {e}")
+                logger.error(f"Failed to save policy '{policy_id}' to storage: {e}")
 
         return {
             "removed": removed_count,
-            "added_to_filesystem": added_to_filesystem_count,
+            "added_to_storage": added_to_storage_count,
         }
     except Exception as e:
         logger.error(f"Failed to validate and sync policies: {e}")
-        return {"removed": 0, "added_to_filesystem": 0}
+        return {"removed": 0, "added_to_storage": 0}
 
 
 async def setup_page_info(state: AgentState, env: ExtensionEnv | BrowserEnvGymAsync):
@@ -1190,7 +1195,10 @@ async def event_stream(
                         ).values
                         if latest_state_values:
                             local_state = AgentState(**latest_state_values)
-                    name = ((event.split("\n")[0]).split(":")[1]).strip()
+                    # Safely parse event name — guard against malformed SSE data
+                    first_line = event.split("\n")[0]
+                    parts = first_line.split(":", 1)
+                    name = parts[1].strip() if len(parts) > 1 else "unknown"
                     logger.debug(f"Yield {event}")
                     if name not in ["ChatAgent"]:
                         # Add stream event to buffer instead of immediate DB write
@@ -1227,6 +1235,10 @@ async def event_stream(
             logger.warning(f"Failed to finish task in tracker on error: {tracker_error}")
 
         yield StreamEvent(name="Error", data=str(e)).format()
+    finally:
+        # Clean up stop event for this thread to prevent unbounded dict growth
+        if thread_id:
+            app_state.stop_events.pop(thread_id, None)
 
 
 app = FastAPI(lifespan=lifespan)
@@ -1599,6 +1611,8 @@ async def stream(
         draft_state = getattr(request.app.state, "draft_app_state", None)
         if draft_state and getattr(draft_state, "agent", None):
             run_agent = draft_state.agent
+        else:
+            logger.warning("Draft agent requested but not available — falling back to published agent")
 
     return StreamingResponse(
         event_stream(
@@ -1773,7 +1787,7 @@ async def get_tools_config(current_user: UserInfo | None = Depends(require_auth)
     )
     try:
         if os.path.exists(config_path):
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             def _read_file():
                 with open(config_path) as f:
@@ -1799,7 +1813,7 @@ async def save_tools_config(
     )
     try:
         data = await request.json()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _write_file():
             with open(config_path, "w") as f:
@@ -1833,11 +1847,12 @@ async def save_model_config(
     """Endpoint to save model configuration (note: this updates environment variables for current session only)."""
     try:
         data = await request.json()
-        os.environ["MODEL_PROVIDER"] = data.get("provider", "anthropic")
-        os.environ["MODEL_NAME"] = data.get("model", "claude-3-5-sonnet-20241022")
-        os.environ["MODEL_TEMPERATURE"] = str(data.get("temperature", 0.7))
-        os.environ["MODEL_MAX_TOKENS"] = str(data.get("maxTokens", 4096))
-        os.environ["MODEL_TOP_P"] = str(data.get("topP", 1.0))
+        with app_state.env_lock:
+            os.environ["MODEL_PROVIDER"] = data.get("provider", "anthropic")
+            os.environ["MODEL_NAME"] = data.get("model", "claude-3-5-sonnet-20241022")
+            os.environ["MODEL_TEMPERATURE"] = str(data.get("temperature", 0.7))
+            os.environ["MODEL_MAX_TOKENS"] = str(data.get("maxTokens", 4096))
+            os.environ["MODEL_TOP_P"] = str(data.get("topP", 1.0))
         logger.info("Model configuration updated (session only)")
         return JSONResponse({"status": "success", "message": "Model configuration updated"})
     except Exception as e:
@@ -1894,7 +1909,7 @@ async def create_conversation(
         conversation = {
             "id": str(uuid.uuid4()),
             "title": data.get("title", "New Conversation"),
-            "timestamp": data.get("timestamp", int(datetime.now().timestamp() * 1000)),
+            "timestamp": data.get("timestamp", int(datetime.now(UTC).timestamp() * 1000)),
             "preview": data.get("preview", ""),
         }
         logger.info(f"Created conversation: {conversation['id']}")
@@ -2175,13 +2190,10 @@ async def save_policies_config(
     except Exception as e:
         logger.error(f"Failed to save policies config: {e}")
         logger.exception(e)
-        import traceback
-
         return JSONResponse(
             {
                 "status": "error",
                 "message": f"Failed to save policies: {e!s}",
-                "traceback": traceback.format_exc(),
             },
             status_code=500,
         )
@@ -2722,7 +2734,7 @@ async def get_workspace_file(
 
         # Read file content
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             def _read_file():
                 with open(file_path, encoding="utf-8") as f:

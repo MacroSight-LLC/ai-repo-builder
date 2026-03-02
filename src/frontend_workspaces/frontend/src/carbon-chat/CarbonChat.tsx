@@ -7,7 +7,7 @@
  *  @license
  */
 
-import React, { useCallback, useRef, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useEffect, useState } from "react";
 import {
   ChatCustomElement,
   type ChatInstance,
@@ -15,20 +15,26 @@ import {
   type CustomSendMessageOptions,
   CarbonTheme,
   BusEventType,
-} from '@carbon/ai-chat';
-import * as api from '../api';
-import { customSendMessage as customSendMessageImpl, stopCugaAgent } from './customSendMessage';
-import { customLoadHistory } from './customLoadHistory';
-import './CarbonChat.css';
+} from "@carbon/ai-chat";
+import * as api from "../api";
+import {
+  customSendMessage as customSendMessageImpl,
+  stopCugaAgent,
+} from "./customSendMessage";
+import { customLoadHistory } from "./customLoadHistory";
+import "./CarbonChat.css";
 
 // Reset thread ID when conversation restarts
 export function generateUUID(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return crypto.randomUUID();
   }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
   });
 }
 
@@ -45,8 +51,8 @@ export function getOrCreateThreadId(): string {
 
 const DEFAULT_HOMESCREEN = {
   isOn: true,
-  greeting: 'Hello, how can I help you today?',
-  starters: ['Hi, what can you do for me?'],
+  greeting: "Hello, how can I help you today?",
+  starters: ["Hi, what can you do for me?"],
 };
 
 interface HomescreenConfig {
@@ -57,7 +63,7 @@ interface HomescreenConfig {
 
 interface CarbonChatProps {
   className?: string;
-  theme?: 'light' | 'dark';
+  theme?: "light" | "dark";
   contained?: boolean;
   useDraft?: boolean;
   threadId?: string | null;
@@ -68,24 +74,29 @@ interface CarbonChatProps {
 }
 
 const CarbonChat = ({
-  className = '',
-  theme = 'light',
+  className = "",
+  theme = "light",
   contained = false,
   useDraft = false,
   threadId = null,
   disableHistory = false,
   isReadonly = false,
   homescreen,
-  onThreadChange
+  onThreadChange,
 }: CarbonChatProps) => {
   const hs = homescreen ?? DEFAULT_HOMESCREEN;
-  const starterLabels = (hs.starters ?? DEFAULT_HOMESCREEN.starters ?? []).filter(Boolean).slice(0, 4);
+  const starterLabels = (hs.starters ?? DEFAULT_HOMESCREEN.starters ?? [])
+    .filter(Boolean)
+    .slice(0, 4);
   const chatInstanceRef = useRef<ChatInstance | null>(null);
   const skipNextHistoryLoadRef = useRef(false);
   const threadIdRef = useRef<string | null>(null);
 
   // Thread ID helpers (per-instance, synced to module-level for customSendMessage)
-  const resetThreadId = useCallback(() => { threadIdRef.current = null; _activeThreadId = null; }, []);
+  const resetThreadId = useCallback(() => {
+    threadIdRef.current = null;
+    _activeThreadId = null;
+  }, []);
   const getOrCreateThreadIdLocal = useCallback(() => {
     if (!threadIdRef.current) {
       threadIdRef.current = getOrCreateThreadId();
@@ -108,11 +119,11 @@ const CarbonChat = ({
     const diffHours = Math.floor(diffMinutes / 60);
 
     if (diffSeconds < 60) {
-      return `${diffSeconds} second${diffSeconds !== 1 ? 's' : ''} ago`;
+      return `${diffSeconds} second${diffSeconds !== 1 ? "s" : ""} ago`;
     } else if (diffMinutes < 60) {
-      return `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''} ago`;
+      return `${diffMinutes} minute${diffMinutes !== 1 ? "s" : ""} ago`;
     } else {
-      return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+      return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
     }
   }, []);
 
@@ -125,14 +136,16 @@ const CarbonChat = ({
       const response = await api.getAgentState(activeThreadId);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        throw new Error(
+          errorData.detail || `HTTP error! status: ${response.status}`,
+        );
       }
       const data = await response.json();
       setDebugData(data);
       setLastUpdateTime(new Date());
     } catch (error) {
-      console.error('Error fetching debug data:', error);
-      setDebugError(error instanceof Error ? error.message : 'Unknown error');
+      console.error("Error fetching debug data:", error);
+      setDebugError(error instanceof Error ? error.message : "Unknown error");
     } finally {
       setIsLoadingDebug(false);
     }
@@ -152,72 +165,97 @@ const CarbonChat = ({
     async (
       request: MessageRequest,
       options: CustomSendMessageOptions,
-      instance: ChatInstance
+      instance: ChatInstance,
     ) => {
-      const result = await customSendMessageImpl(request, options, instance, useDraft, disableHistory);
-      
+      const result = await customSendMessageImpl(
+        request,
+        options,
+        instance,
+        useDraft,
+        disableHistory,
+      );
+
       if (onThreadChange && threadIdRef.current) {
         skipNextHistoryLoadRef.current = true;
         onThreadChange(threadIdRef.current);
       }
-      
+
       return result;
     },
-    [useDraft, disableHistory, onThreadChange]
+    [useDraft, disableHistory, onThreadChange],
   );
 
-  const handleChatReady = useCallback((instance: ChatInstance) => {
-    console.log('[CarbonChat] handleChatReady called, setting up event listeners');
-    chatInstanceRef.current = instance;
-    
-    instance.on({
-      type: BusEventType.RESTART_CONVERSATION,
-      handler: () => {
-        console.log('[CarbonChat] RESTART_CONVERSATION event received');
-        resetThreadId();
-      },
-    });
+  const handleChatReady = useCallback(
+    (instance: ChatInstance) => {
+      console.log(
+        "[CarbonChat] handleChatReady called, setting up event listeners",
+      );
+      chatInstanceRef.current = instance;
 
-    instance.on({
-      type: BusEventType.STOP_STREAMING,
-      handler: () => {
-        const tid = getOrCreateThreadIdLocal();
-        console.log('[CarbonChat] STOP_STREAMING event received, calling /stop for thread:', tid);
-        stopCugaAgent(tid);
-      },
-    });
-    
-    console.log('[CarbonChat] Setting up MESSAGE_ITEM_CUSTOM listener');
-    instance.on({
-      type: BusEventType.MESSAGE_ITEM_CUSTOM,
-      handler: async (event: any) => {
-        const buttonItem = event.messageItem;
-        if (!buttonItem) return;
+      instance.on({
+        type: BusEventType.RESTART_CONVERSATION,
+        handler: () => {
+          console.log("[CarbonChat] RESTART_CONVERSATION event received");
+          resetThreadId();
+        },
+      });
 
-        const custom_event_name = buttonItem.custom_event_name;
-        const user_defined = buttonItem.user_defined ?? {};
+      instance.on({
+        type: BusEventType.STOP_STREAMING,
+        handler: () => {
+          const tid = getOrCreateThreadIdLocal();
+          console.log(
+            "[CarbonChat] STOP_STREAMING event received, calling /stop for thread:",
+            tid,
+          );
+          stopCugaAgent(tid);
+        },
+      });
 
-        if (custom_event_name === 'tool_approval_response' || custom_event_name === 'suggest_human_action' || user_defined?.action_id) {
-          const approved = user_defined?.approved === true;
-          const actionId = user_defined?.action_id;
+      console.log("[CarbonChat] Setting up MESSAGE_ITEM_CUSTOM listener");
+      instance.on({
+        type: BusEventType.MESSAGE_ITEM_CUSTOM,
+        handler: async (event: any) => {
+          const buttonItem = event.messageItem;
+          if (!buttonItem) return;
 
-          const actionResponse = {
-            action_id: actionId,
-            response_type: 'confirmation',
-            timestamp: new Date().toISOString(),
-            confirmed: approved,
-          };
+          const custom_event_name = buttonItem.custom_event_name;
+          const user_defined = buttonItem.user_defined ?? {};
 
-          const request: MessageRequest = { input: { text: '' } };
-          const options: CustomSendMessageOptions = {
-            signal: new AbortController().signal,
-            silent: false,
-          };
-          await customSendMessageImpl(request, options, instance, useDraft, disableHistory, actionResponse);
-        }
-      },
-    });
-  }, [useDraft, disableHistory]);
+          if (
+            custom_event_name === "tool_approval_response" ||
+            custom_event_name === "suggest_human_action" ||
+            user_defined?.action_id
+          ) {
+            const approved = user_defined?.approved === true;
+            const actionId = user_defined?.action_id;
+
+            const actionResponse = {
+              action_id: actionId,
+              response_type: "confirmation",
+              timestamp: new Date().toISOString(),
+              confirmed: approved,
+            };
+
+            const request: MessageRequest = { input: { text: "" } };
+            const options: CustomSendMessageOptions = {
+              signal: new AbortController().signal,
+              silent: false,
+            };
+            await customSendMessageImpl(
+              request,
+              options,
+              instance,
+              useDraft,
+              disableHistory,
+              actionResponse,
+            );
+          }
+        },
+      });
+    },
+    [useDraft, disableHistory],
+  );
 
   // Load history when threadId changes
   useEffect(() => {
@@ -231,30 +269,35 @@ const CarbonChat = ({
         }
         const loadAndInsertHistory = async () => {
           if (!chatInstanceRef.current) return;
-          
+
           try {
             // Clear the current conversation
             await chatInstanceRef.current.messaging.clearConversation();
-            
+
             // Load the history
-            const history = await customLoadHistory(chatInstanceRef.current, threadId);
-            
+            const history = await customLoadHistory(
+              chatInstanceRef.current,
+              threadId,
+            );
+
             if (history.length > 0 && chatInstanceRef.current) {
-              console.log(`Loaded ${history.length} history items for thread ${threadId}`);
+              console.log(
+                `Loaded ${history.length} history items for thread ${threadId}`,
+              );
               // Insert the history into the chat
               chatInstanceRef.current.messaging.insertHistory(history);
             } else {
               console.log(`No history found for thread ${threadId}`);
             }
           } catch (error) {
-            console.error('Error loading history:', error);
+            console.error("Error loading history:", error);
           }
         };
-        
+
         loadAndInsertHistory();
       } else {
         // If threadId is null, start a fresh conversation
-        console.log('Starting new conversation');
+        console.log("Starting new conversation");
         threadIdRef.current = null;
         _activeThreadId = null;
         chatInstanceRef.current.messaging.clearConversation();
@@ -270,7 +313,7 @@ const CarbonChat = ({
       }
       return await customLoadHistory(instance, threadId || undefined);
     },
-    [threadId, disableHistory]
+    [threadId, disableHistory],
   );
 
   return (
@@ -307,7 +350,7 @@ const CarbonChat = ({
               <div className="debug-data">
                 <div className="debug-section">
                   <strong>Thread ID:</strong>
-                  <code>{threadIdRef.current || 'None'}</code>
+                  <code>{threadIdRef.current || "None"}</code>
                 </div>
                 {lastUpdateTime && (
                   <div className="debug-section">
@@ -332,46 +375,53 @@ const CarbonChat = ({
             </button>
             <span className="debug-auto-refresh">
               Auto-refresh: 3s
-              {lastUpdateTime && ` • Updated ${formatRelativeTime(lastUpdateTime)}`}
+              {lastUpdateTime &&
+                ` • Updated ${formatRelativeTime(lastUpdateTime)}`}
             </span>
           </div>
         </div>
       )}
 
       <ChatCustomElement
-      className={`${contained ? 'carbon-chat-contained' : 'carbon-chat-fullscreen'} ${className}`}
-      injectCarbonTheme={theme === 'dark' ? CarbonTheme.G100 : CarbonTheme.WHITE}
-      openChatByDefault={true}
-      assistantName="CUGA Agent"
-      isReadonly={isReadonly}
-      header={{
-        isOn: true,
-        showRestartButton: true,
-        showAiLabel: false,
-        hideMinimizeButton: true,
-        
-      } as any}
-      homescreen={{
-        isOn: !isReadonly && (hs.isOn ?? true),
-        greeting: hs.greeting ?? DEFAULT_HOMESCREEN.greeting,
-        starters: !isReadonly && starterLabels.length > 0
-          ? { isOn: true, buttons: starterLabels.map((label) => ({ label })) }
-          : { isOn: false, buttons: [] },
-      }}
-      layout={{
-        showFrame: false,
-        hasContentMaxWidth: true,
-      }}
-      input={{
-        isVisible: true,
-      }}
-      
-      messaging={{
-        customSendMessage: handleCustomSendMessage,
-        customLoadHistory: handleCustomLoadHistory,
-      }}
-      onError={(data: any) => console.error('[CarbonChat] onError:', data)}
-      onAfterRender={handleChatReady}
+        className={`${contained ? "carbon-chat-contained" : "carbon-chat-fullscreen"} ${className}`}
+        injectCarbonTheme={
+          theme === "dark" ? CarbonTheme.G100 : CarbonTheme.WHITE
+        }
+        openChatByDefault={true}
+        assistantName="CUGA Agent"
+        isReadonly={isReadonly}
+        header={
+          {
+            isOn: true,
+            showRestartButton: true,
+            showAiLabel: false,
+            hideMinimizeButton: true,
+          } as any
+        }
+        homescreen={{
+          isOn: !isReadonly && (hs.isOn ?? true),
+          greeting: hs.greeting ?? DEFAULT_HOMESCREEN.greeting,
+          starters:
+            !isReadonly && starterLabels.length > 0
+              ? {
+                  isOn: true,
+                  buttons: starterLabels.map((label) => ({ label })),
+                }
+              : { isOn: false, buttons: [] },
+        }}
+        layout={{
+          showFrame: false,
+          hasContentMaxWidth: true,
+        }}
+        input={{
+          isVisible: true,
+        }}
+        messaging={{
+          customSendMessage: handleCustomSendMessage,
+          customLoadHistory: handleCustomLoadHistory,
+        }}
+        onError={(data: any) => console.error("[CarbonChat] onError:", data)}
+        onAfterRender={handleChatReady}
       />
     </>
   );

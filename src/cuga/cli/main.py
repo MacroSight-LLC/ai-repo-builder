@@ -8,7 +8,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Any, List, Optional
+from typing import Any
 
 import httpx
 import psutil
@@ -19,8 +19,6 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from cuga.config import PACKAGE_ROOT, TRAJECTORY_DATA_DIR, get_user_data_path, settings
-from cuga.configurations.instructions_manager import InstructionsManager
 from cuga.backend.cuga_graph.policy.cli import app as policy_app
 from cuga.backend.server.demo_manage_setup import (
     build_tools_from_apps,
@@ -29,6 +27,8 @@ from cuga.backend.server.demo_manage_setup import (
 )
 from cuga.backend.server.managed_mcp import ensure_managed_mcp_file_exists, get_managed_mcp_path
 from cuga.cli.app_manager import AppManager
+from cuga.config import PACKAGE_ROOT, TRAJECTORY_DATA_DIR, get_user_data_path, settings
+from cuga.configurations.instructions_manager import InstructionsManager
 
 instructions_manager = InstructionsManager()
 
@@ -46,7 +46,9 @@ The email of my assistant is jane@example.com"""
 
 
 def _demo_uses_ssl() -> bool:
-    return bool(os.environ.get("SSL_KEYFILE", "").strip() and os.environ.get("SSL_CERTFILE", "").strip())
+    return bool(
+        os.environ.get("SSL_KEYFILE", "").strip() and os.environ.get("SSL_CERTFILE", "").strip()
+    )
 
 
 def _demo_port() -> int:
@@ -60,7 +62,9 @@ def _make_app_manager() -> AppManager:
         kill_ports=kill_processes_by_port,
         kill_process=kill_process_tree,
         wait_tcp=lambda p, lbl, r, i: wait_for_tcp_port(p, lbl, max_retries=r, retry_interval=i),
-        wait_http=lambda p, name: wait_for_server(p, name, https=_demo_uses_ssl() and p == _demo_port()),
+        wait_http=lambda p, name: wait_for_server(
+            p, name, https=_demo_uses_ssl() and p == _demo_port()
+        ),
     )
 
 
@@ -88,11 +92,11 @@ shutdown_event = threading.Event()
 IS_WINDOWS = platform.system().lower().startswith("win")
 
 # Playwright launcher state (for extension mode)
-_playwright_thread: Optional[threading.Thread] = None
+_playwright_thread: threading.Thread | None = None
 _playwright_started: bool = False
 
 
-def kill_processes_by_port(ports: List[int], silent: bool = False):
+def kill_processes_by_port(ports: list[int], silent: bool = False):
     """Kill processes listening on specified ports.
 
     Args:
@@ -102,7 +106,7 @@ def kill_processes_by_port(ports: List[int], silent: bool = False):
     killed_any = False
     for port in ports:
         try:
-            for proc in psutil.process_iter(['pid', 'name']):
+            for proc in psutil.process_iter(["pid", "name"]):
                 try:
                     # Get connections separately to handle cases where it's not available
                     try:
@@ -111,16 +115,16 @@ def kill_processes_by_port(ports: List[int], silent: bool = False):
                         connections = []
 
                     for conn in connections:
-                        if hasattr(conn, 'laddr') and conn.laddr and conn.laddr.port == port:
+                        if hasattr(conn, "laddr") and conn.laddr and conn.laddr.port == port:
                             if not silent:
                                 logger.info(
                                     f"🔄 Killing existing process {proc.info['name']} (PID: {proc.info['pid']}) on port {port}"
                                 )
-                            psutil.Process(proc.info['pid']).terminate()
+                            psutil.Process(proc.info["pid"]).terminate()
                             killed_any = True
                             time.sleep(0.5)
                             try:
-                                psutil.Process(proc.info['pid']).kill()
+                                psutil.Process(proc.info["pid"]).kill()
                             except psutil.NoSuchProcess:
                                 pass
                 except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
@@ -156,7 +160,7 @@ def wait_for_tcp_port(
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(1)
-                result = s.connect_ex(('127.0.0.1', port))
+                result = s.connect_ex(("127.0.0.1", port))
                 if result == 0:
                     logger.info(f"{server_name} is ready on port {port}!")
                     return
@@ -303,7 +307,9 @@ def start_extension_browser_if_configured():
             # Import here to avoid hard dependency if feature is off
             from playwright.sync_api import sync_playwright
 
-            user_data_dir = get_user_data_path() or os.path.join(os.getcwd(), "logging", "pw_user_data")
+            user_data_dir = get_user_data_path() or os.path.join(
+                os.getcwd(), "logging", "pw_user_data"
+            )
             os.makedirs(user_data_dir, exist_ok=True)
 
             logger.info("Launching Chromium with extension (Playwright persistent context)...")
@@ -418,10 +424,10 @@ direct_log_handles: dict[str, Any] = {}
 
 def run_direct_service(
     service_name: str,
-    command: List[str],
-    cwd: Optional[str] = None,
-    log_file: Optional[str] = None,
-    env_vars: Optional[dict] = None,
+    command: list[str],
+    cwd: str | None = None,
+    log_file: str | None = None,
+    env_vars: dict | None = None,
 ):
     """Run a service command directly and return the process."""
     try:
@@ -429,20 +435,20 @@ def run_direct_service(
 
         # Force colored output and ensure proper environment variables
         env = os.environ.copy()
-        env['FORCE_COLOR'] = '1'
+        env["FORCE_COLOR"] = "1"
 
         # On Windows, set UTF-8 encoding to handle Unicode characters in subprocess output
         if IS_WINDOWS:
-            env['PYTHONIOENCODING'] = 'utf-8'
+            env["PYTHONIOENCODING"] = "utf-8"
 
         # Add any additional environment variables
         if env_vars:
             env.update(env_vars)
 
         # Ensure APPWORLD_ROOT is used only for appworld commands
-        joined = ' '.join(command).lower()
-        if 'appworld' in joined:
-            cwd = env.get('APPWORLD_ROOT')
+        joined = " ".join(command).lower()
+        if "appworld" in joined:
+            cwd = env.get("APPWORLD_ROOT")
         else:
             # Keep current working dir for non-appworld services (e.g., memory)
             cwd = None
@@ -451,16 +457,16 @@ def run_direct_service(
         logger.debug(f"Working directory: {cwd or os.getcwd()}")
 
         # Start the process with a new process group to make it easier to kill
-        kwargs = {'cwd': cwd, 'env': env, 'preexec_fn': os.setsid if not IS_WINDOWS else None}
+        kwargs = {"cwd": cwd, "env": env, "preexec_fn": os.setsid if not IS_WINDOWS else None}
 
         # Redirect output to log file if provided
         if log_file:
             log_path = os.path.abspath(log_file)
             log_dir = os.path.dirname(log_path)
             os.makedirs(log_dir, exist_ok=True)
-            log_handle = open(log_path, 'a', encoding='utf-8')  # noqa: SIM115
-            kwargs['stdout'] = log_handle
-            kwargs['stderr'] = subprocess.STDOUT
+            log_handle = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
+            kwargs["stdout"] = log_handle
+            kwargs["stderr"] = subprocess.STDOUT
             logger.info(f"Redirecting {service_name} output to {log_path}")
         else:
             log_handle = None
@@ -517,8 +523,12 @@ def callback(
         False, "--verbose", "-v", help="Enable verbose output with detailed logging information"
     ),
     version: bool = typer.Option(
-        False, "--version", "-V", help="Show version and exit",
-        callback=_version_callback, is_eager=True,
+        False,
+        "--version",
+        "-V",
+        help="Show version and exit",
+        callback=_version_callback,
+        is_eager=True,
     ),
 ):
     """
@@ -578,7 +588,12 @@ def _start_demo_crm_services(
         if enable_supervisor:
             os.environ["DYNACONF_SUPERVISOR__ENABLED"] = "true"
             supervisor_config_path = os.path.join(
-                PACKAGE_ROOT, "backend", "tools_env", "registry", "config", "supervisor_demo_crm.yaml"
+                PACKAGE_ROOT,
+                "backend",
+                "tools_env",
+                "registry",
+                "config",
+                "supervisor_demo_crm.yaml",
             )
             os.environ["DYNACONF_SUPERVISOR__CONFIG_PATH"] = supervisor_config_path
             logger.info(f"Supervisor enabled with config: {supervisor_config_path}")
@@ -647,14 +662,24 @@ def _start_demo_crm_services(
             services_table.add_column("Service", style="bold white", no_wrap=True)
             services_table.add_column("URL", style="cyan")
             if start_email:
-                services_table.add_row("• Email Sink", f"smtp://localhost:{app_mgr.email_sink_port}")
-                services_table.add_row("• Email MCP Server", f"http://localhost:{app_mgr.email_mcp_port}/sse")
+                services_table.add_row(
+                    "• Email Sink", f"smtp://localhost:{app_mgr.email_sink_port}"
+                )
+                services_table.add_row(
+                    "• Email MCP Server", f"http://localhost:{app_mgr.email_mcp_port}/sse"
+                )
             if start_filesystem:
-                services_table.add_row("• Filesystem MCP Server", f"http://localhost:{app_mgr.fs_port}/sse")
+                services_table.add_row(
+                    "• Filesystem MCP Server", f"http://localhost:{app_mgr.fs_port}/sse"
+                )
             if start_crm:
                 services_table.add_row("• CRM API Server", f"http://localhost:{app_mgr.crm_port}")
-            services_table.add_row("• Registry Server", f"http://localhost:{settings.server_ports.registry}")
-            services_table.add_row("• Demo Server", f"http://localhost:{settings.server_ports.demo}")
+            services_table.add_row(
+                "• Registry Server", f"http://localhost:{settings.server_ports.registry}"
+            )
+            services_table.add_row(
+                "• Demo Server", f"http://localhost:{settings.server_ports.demo}"
+            )
 
             filesystem_text = Text()
             filesystem_text.append("  Read/Write allowed in:\n", style="bold white")
@@ -670,7 +695,9 @@ def _start_demo_crm_services(
 
             if enable_supervisor:
                 groups.append(Text())
-                groups.append(Text("🤖 Supervisor: enabled (multi-agent coordination)", style="bold magenta"))
+                groups.append(
+                    Text("🤖 Supervisor: enabled (multi-agent coordination)", style="bold magenta")
+                )
 
             panel_content = Group(*groups)
 
@@ -695,7 +722,15 @@ def _start_demo_crm_services(
 # Helper function to validate service
 def validate_service(service: str):
     """Validate service name."""
-    valid_services = ["demo", "demo_crm", "demo_supervisor", "manager", "registry", "appworld", "memory"]
+    valid_services = [
+        "demo",
+        "demo_crm",
+        "demo_supervisor",
+        "manager",
+        "registry",
+        "appworld",
+        "memory",
+    ]
 
     if service not in valid_services:
         logger.error(f"Unknown service: {service}. Valid options are: {', '.join(valid_services)}")
@@ -826,7 +861,9 @@ def start(
             os.environ["DYNACONF_POLICY__FILESYSTEM_SYNC"] = "false"
             managed_path = ensure_managed_mcp_file_exists(get_managed_mcp_path())
             os.environ["MCP_SERVERS_FILE"] = "none"
-            logger.info("Manager mode: policy filesystem sync disabled, MCP_SERVERS_FILE=%s", managed_path)
+            logger.info(
+                "Manager mode: policy filesystem sync disabled, MCP_SERVERS_FILE=%s", managed_path
+            )
             setup_demo_manage_config("manager", tools=resolved_tools)
 
             app_mgr = _make_app_manager()
@@ -910,7 +947,9 @@ def start(
 
             os.environ["CUGA_HOST"] = host
             if sandbox:
-                logger.info("Starting demo with remote sandbox mode enabled (features.local_sandbox=false)")
+                logger.info(
+                    "Starting demo with remote sandbox mode enabled (features.local_sandbox=false)"
+                )
                 os.environ["DYNACONF_FEATURES__LOCAL_SANDBOX"] = "false"
 
             app_mgr.prepare_workspace(workspace_path)
@@ -995,14 +1034,18 @@ def start(
         try:
             logger.info("🧹 Checking for existing processes on required ports...")
             app_mgr = _make_app_manager()
-            kill_processes_by_port([settings.server_ports.environment_url, settings.server_ports.apis_url])
+            kill_processes_by_port(
+                [settings.server_ports.environment_url, settings.server_ports.apis_url]
+            )
             app_mgr.start_appworld()
 
             if direct_processes:
                 table = Table(show_header=False, box=None, padding=(0, 1))
                 table.add_column("Service", style="bold white")
                 table.add_column("URL", style="cyan")
-                table.add_row("Environment:", f"http://localhost:{settings.server_ports.environment_url}")
+                table.add_row(
+                    "Environment:", f"http://localhost:{settings.server_ports.environment_url}"
+                )
                 table.add_row("API:", f"http://localhost:{settings.server_ports.apis_url}")
 
                 console.print()
@@ -1210,7 +1253,9 @@ def status(
             if service_name in direct_processes:
                 process = direct_processes[service_name]
                 if process.poll() is None:
-                    logger.info(f"{service_name.capitalize()} service: Running (PID: {process.pid})")
+                    logger.info(
+                        f"{service_name.capitalize()} service: Running (PID: {process.pid})"
+                    )
                 else:
                     logger.info(f"{service_name.capitalize()} service: Terminated")
             else:
@@ -1251,9 +1296,13 @@ def status(
                         f"{service_name.replace('appworld-', '').capitalize()} service: Running (PID: {process.pid})"
                     )
                 else:
-                    logger.info(f"{service_name.replace('appworld-', '').capitalize()} service: Terminated")
+                    logger.info(
+                        f"{service_name.replace('appworld-', '').capitalize()} service: Terminated"
+                    )
             else:
-                logger.info(f"{service_name.replace('appworld-', '').capitalize()} service: Not running")
+                logger.info(
+                    f"{service_name.replace('appworld-', '').capitalize()} service: Not running"
+                )
         return
 
     elif service == "memory":
@@ -1284,22 +1333,22 @@ def status(
                 process = direct_processes[service_name]
                 if process.poll() is None:
                     display_name = (
-                        service_name.replace('appworld-', 'appworld-')
-                        if 'appworld-' in service_name
+                        service_name.replace("appworld-", "appworld-")
+                        if "appworld-" in service_name
                         else service_name
                     )
                     logger.info(f"  {display_name}: Running (PID: {process.pid})")
                 else:
                     display_name = (
-                        service_name.replace('appworld-', 'appworld-')
-                        if 'appworld-' in service_name
+                        service_name.replace("appworld-", "appworld-")
+                        if "appworld-" in service_name
                         else service_name
                     )
                     logger.info(f"  {display_name}: Terminated")
             else:
                 display_name = (
-                    service_name.replace('appworld-', 'appworld-')
-                    if 'appworld-' in service_name
+                    service_name.replace("appworld-", "appworld-")
+                    if "appworld-" in service_name
                     else service_name
                 )
                 logger.info(f"  {display_name}: Not running")

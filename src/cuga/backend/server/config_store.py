@@ -22,8 +22,8 @@ from cuga.config import get_service_instance_id, get_tenant_id
 
 
 def _parse_agent_id(agent_id: str) -> str:
-    if '--' in agent_id:
-        return agent_id.split('--')[0]
+    if "--" in agent_id:
+        return agent_id.split("--")[0]
     return agent_id
 
 
@@ -93,7 +93,11 @@ async def save_config(config: dict[str, Any], agent_id: str = "cuga-default") ->
         max_ver = row["max_ver"] if row and "max_ver" in row else (row[0] if row else None)
         next_version = (max_ver or 0) + 1
         version_str = str(next_version)
-        ts = "CURRENT_TIMESTAMP" if type(store).__name__ == "ProdRelationalStore" else "datetime('now')"
+        ts = (
+            "CURRENT_TIMESTAMP"
+            if type(store).__name__ == "ProdRelationalStore"
+            else "datetime('now')"
+        )
         await store.execute(
             f"""
             INSERT INTO agent_configs (tenant_id, instance_id, agent_id, version, config_json, updated_at)

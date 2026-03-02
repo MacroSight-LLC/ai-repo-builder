@@ -1,19 +1,26 @@
 from __future__ import annotations
 
-from cuga.backend.activity_tracker.tracker import ActivityTracker
-from cuga.backend.cuga_graph.utils.controller import AgentRunner, ExperimentResult
-from cuga.evaluation.langfuse.get_langfuse_data import LangfuseTraceHandler
+import csv
+import json
+import os
+import traceback
+from collections.abc import Iterable
+from pathlib import Path
+from statistics import mean
+from typing import Any
 
 from loguru import logger
-import traceback
 from pydantic import BaseModel
-from typing import List, Dict, Iterable, Any, Optional
-import json
-import csv
-from cuga.evaluation.calculate_test_score import evaluate_test_and_details, TestScore, TestScoreDetails, ToolCall
-from statistics import mean
-from pathlib import Path
-import os
+
+from cuga.backend.activity_tracker.tracker import ActivityTracker
+from cuga.backend.cuga_graph.utils.controller import AgentRunner, ExperimentResult
+from cuga.evaluation.calculate_test_score import (
+    TestScore,
+    TestScoreDetails,
+    ToolCall,
+    evaluate_test_and_details,
+)
+from cuga.evaluation.langfuse.get_langfuse_data import LangfuseTraceHandler
 
 tracker = ActivityTracker()
 
@@ -24,8 +31,8 @@ class ExpectedOutput(BaseModel):
     """
 
     response: str
-    keywords: List[str]
-    tool_calls: List[ToolCall]
+    keywords: list[str]
+    tool_calls: list[ToolCall]
 
 
 class TestCase(BaseModel):
@@ -52,7 +59,7 @@ class TestResult(BaseModel):
     details: TestScoreDetails
 
 
-def dict_subset_with_reason(sup: Dict, sub: Dict, path="") -> List[str]:
+def dict_subset_with_reason(sup: dict, sub: dict, path="") -> list[str]:
     """Return list of reasons why sub is not a subset of sup."""
     reasons = []
     for k, v in sub.items():
@@ -67,7 +74,7 @@ def dict_subset_with_reason(sup: Dict, sub: Dict, path="") -> List[str]:
     return reasons
 
 
-def compare_toolcalls(a_list: Iterable[ToolCall], b_list: Iterable[ToolCall]) -> List[str]:
+def compare_toolcalls(a_list: Iterable[ToolCall], b_list: Iterable[ToolCall]) -> list[str]:
     all_reasons = []
     for a in a_list:
         matched = False
@@ -98,44 +105,46 @@ def parse_test_cases(json_file_path: str) -> dict[Any, list[Any]]:
     if not path.is_absolute():
         path = Path.cwd() / path
 
-    with open(path, 'r') as f:
+    with open(path) as f:
         data = json.load(f)
 
     test_cases = {}
     for app in data:
-        for test_case_data in app['test_cases']:
+        for test_case_data in app["test_cases"]:
             # Extract user input as intent (first user input)
-            intent = test_case_data['intent'] if test_case_data['intent'] else ""
+            intent = test_case_data["intent"] if test_case_data["intent"] else ""
 
             # Parse tool calls
             tool_calls = [
-                ToolCall(name=call['name'], args=call['args'])
-                for call in test_case_data['expected_output']['tool_calls']
+                ToolCall(name=call["name"], args=call["args"])
+                for call in test_case_data["expected_output"]["tool_calls"]
             ]
 
             # Parse expected output
             expected_output = ExpectedOutput(
-                response=test_case_data['expected_output']['response'],
-                keywords=test_case_data['expected_output']['keywords'],
+                response=test_case_data["expected_output"]["response"],
+                keywords=test_case_data["expected_output"]["keywords"],
                 tool_calls=tool_calls,
             )
 
             # Create TestCase object
             test_case = TestCase(
-                app=app['name'],
-                name=test_case_data['name'],
-                description=test_case_data['description'],
+                app=app["name"],
+                name=test_case_data["name"],
+                description=test_case_data["description"],
                 intent=intent,
                 expected_output=expected_output,
             )
-            if app['name'] not in test_cases:
-                test_cases[app['name']] = []
-            test_cases[app['name']].append(test_case)
+            if app["name"] not in test_cases:
+                test_cases[app["name"]] = []
+            test_cases[app["name"]].append(test_case)
 
     return test_cases
 
 
-async def run_cuga(test_file_path: str, result_file_path: str) -> tuple[list[TestCase], list[ExperimentResult]]:
+async def run_cuga(
+    test_file_path: str, result_file_path: str
+) -> tuple[list[TestCase], list[ExperimentResult]]:
     test_cases = parse_test_cases(test_file_path)
     print(f"test cases: {len(test_cases)}\napps: {list(test_cases.keys())}")
     agent_runner = AgentRunner(browser_enabled=False)
@@ -145,7 +154,7 @@ async def run_cuga(test_file_path: str, result_file_path: str) -> tuple[list[Tes
         tracker.start_experiment(task_ids=task_ids, experiment_name=app, description="")
         for i, task in enumerate(test_cases[app]):
             try:
-                tracker.reset(intent=task.intent, task_id=f"{app}_{str(i)}")
+                tracker.reset(intent=task.intent, task_id=f"{app}_{i!s}")
                 result = await agent_runner.run_task_generic(
                     eval_mode=False, goal=task.intent, current_datetime=tracker.current_date
                 )
@@ -162,7 +171,7 @@ async def run_cuga(test_file_path: str, result_file_path: str) -> tuple[list[Tes
                 tracker.finish_task(
                     intent=task.intent,
                     site="",
-                    task_id=f"{app}_{str(i)}",
+                    task_id=f"{app}_{i!s}",
                     eval="",
                     score=mean(
                         [
@@ -182,11 +191,13 @@ async def run_cuga(test_file_path: str, result_file_path: str) -> tuple[list[Tes
                     else None,
                 )
             except Exception as e:
-                results.append(ExperimentResult(answer=f"Error {e}", score=0, messages=[], steps=[]))
+                results.append(
+                    ExperimentResult(answer=f"Error {e}", score=0, messages=[], steps=[])
+                )
                 tracker.finish_task(
                     intent=task.intent,
                     site="",
-                    task_id=f"{app}_{str(i)}",
+                    task_id=f"{app}_{i!s}",
                     eval="",
                     score=0,
                     agent_answer=f"Error: {e}",
@@ -199,10 +210,12 @@ async def run_cuga(test_file_path: str, result_file_path: str) -> tuple[list[Tes
 
 
 def parse_test_results(
-    test_cases: List[TestCase], experiment_results: List[ExperimentResult]
-) -> List[TestResult]:
+    test_cases: list[TestCase], experiment_results: list[ExperimentResult]
+) -> list[TestResult]:
     if len(test_cases) != len(experiment_results):
-        raise ValueError(f"Mismatch: {len(test_cases)} test cases vs {len(experiment_results)} results")
+        raise ValueError(
+            f"Mismatch: {len(test_cases)} test cases vs {len(experiment_results)} results"
+        )
 
     results = []
 
@@ -215,7 +228,7 @@ def parse_test_results(
         tool_calls = []
         for call in [step for step in experiment_result.steps if "api_call" in step.name]:
             call_json = json.loads(call.data)
-            tool_calls.append(ToolCall(name=call_json['function_name'], args=call_json['args']))
+            tool_calls.append(ToolCall(name=call_json["function_name"], args=call_json["args"]))
         test_score, test_score_details = evaluate_test_and_details(
             keywords, tool_calls, expected_tools, answer, test_case.expected_output.response
         )
@@ -234,9 +247,9 @@ def parse_test_results(
 
 
 def save_test_results(
-    results: List["TestResult"],
+    results: list[TestResult],
     json_path: str = "test_results.json",
-    csv_path: Optional[str] = None,
+    csv_path: str | None = None,
 ) -> None:
     """
     Save test results to JSON (as a list) and CSV (append rows, no duplicate headers).
@@ -247,7 +260,7 @@ def save_test_results(
     # ---- JSON ----
     # Load existing results (list), append, then overwrite
     if os.path.exists(json_path) and os.path.getsize(json_path) > 0:
-        with open(json_path, "r", encoding="utf-8") as f:
+        with open(json_path, encoding="utf-8") as f:
             try:
                 existing = json.load(f)
                 if not isinstance(existing, list):
@@ -296,8 +309,9 @@ def save_test_results(
 
 
 if __name__ == "__main__":
-    import asyncio
     import argparse
+    import asyncio
+
     from cuga.config import settings
 
     settings.update({"ADVANCED_FEATURES": {"TRACKER_ENABLED": True}}, merge=True)

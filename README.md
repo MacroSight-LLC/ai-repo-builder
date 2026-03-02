@@ -33,13 +33,13 @@ Building a domain-specific enterprise agent from scratch is complex and requires
 >
 > **Policy Types & Enterprise Value:**
 >
-> | Policy Type | Value | Use Cases |
-> |------------|-------|-----------|
-> | **Intent Guard** | Block unauthorized actions | Data deletion prevention, access restrictions, compliance enforcement |
-> | **Playbook** | Standardize workflows | Onboarding, audit workflows, regulatory compliance |
-> | **Tool Approval** | Human oversight | Financial transactions, data modifications |
-> | **Tool Guide** | Domain knowledge | Compliance notes, domain context |
-> | **Output Formatter** | Format, redirect, govern outputs | report generation, response routing, output masking |
+> | Policy Type          | Value                            | Use Cases                                                             |
+> | -------------------- | -------------------------------- | --------------------------------------------------------------------- |
+> | **Intent Guard**     | Block unauthorized actions       | Data deletion prevention, access restrictions, compliance enforcement |
+> | **Playbook**         | Standardize workflows            | Onboarding, audit workflows, regulatory compliance                    |
+> | **Tool Approval**    | Human oversight                  | Financial transactions, data modifications                            |
+> | **Tool Guide**       | Domain knowledge                 | Compliance notes, domain context                                      |
+> | **Output Formatter** | Format, redirect, govern outputs | report generation, response routing, output masking                   |
 >
 > 📚 **Documentation**: [SDK Guide](https://docs.cuga.dev/docs/sdk/cuga_agent/) | [Policies Guide](https://docs.cuga.dev/docs/sdk/policies/) | [Quick Start →](#-using-cuga-as-a-python-sdk)
 
@@ -70,7 +70,6 @@ CUGA achieves state-of-the-art performance on leading benchmarks:
 
 Explore the [Roadmap](#roadmap) to see what's ahead, or join the [🤝 Call for the Community](#call-for-the-community) to get involved.
 
-
 ## 🎬 CUGA in Action
 
 ### Hybrid Task Execution
@@ -96,7 +95,6 @@ Experience CUGA's hybrid capabilities by combining API calls with web interactio
    ```
 
 2. **Install browser API support:**
-
    - Installs playwright browser API and Chromium browser
    - The `playwright` installer should already be included after installing with [Quick Start](#-quick-start)
 
@@ -111,13 +109,11 @@ Experience CUGA's hybrid capabilities by combining API calls with web interactio
    ```
 
 4. **Enable the browser extension:**
-
    - Click the extension puzzle icon in your browser
    - Toggle the CUGA extension to activate it
    - This will open the CUGA side panel
 
 5. **Open the test application:**
-
    - Navigate to: [Sales app](https://samimarreed.github.io/sales/)
 
 6. **Try the hybrid task:**
@@ -208,7 +204,6 @@ cuga viz
 
 ```
 
-
 <details>
 <summary>🤖 LLM Configuration - Advanced Options</summary>
 
@@ -240,6 +235,7 @@ CUGA supports multiple LLM providers with flexible configuration options. You ca
 1. Create an account at [platform.openai.com](https://platform.openai.com)
 2. Generate an API key from your [API keys page](https://platform.openai.com/api-keys)
 3. Add to your `.env` file:
+
    ```env
    # OpenAI Configuration
    OPENAI_API_KEY=sk-...your-key-here...
@@ -311,6 +307,7 @@ CUGA supports LiteLLM through the OpenAI configuration by overriding the base UR
    OPENAI_BASE_URL=https://your-litellm-endpoint.com  # Override base URL
    OPENAI_API_VERSION=2024-08-06        # Override API version
    ```
+
 ### Option 5: Groq Support ⚡
 
 **Setup Instructions:**
@@ -318,11 +315,12 @@ CUGA supports LiteLLM through the OpenAI configuration by overriding the base UR
 1. Create an account at [groq.com](https://groq.com)
 2. Generate an API key from your [API keys page](https://console.groq.com/keys)
 3. Add to your `.env` file:
+
    ```env
    # Groq Configuration
    GROQ_API_KEY=your-groq-api-key-here
    AGENT_SETTING_CONFIG="settings.groq.toml"
-   
+
    # Optional override
    MODEL_NAME=llama-3.1-70b-versatile  # Override model name
    ```
@@ -333,7 +331,9 @@ CUGA supports LiteLLM through the OpenAI configuration by overriding the base UR
 - Base URL: Groq's default endpoint
 
 ### Option 6: OpenRouter Support
+
 **Setup Instructions:**
+
 1. Create an account at [openrouter.ai](https://openrouter.ai)
 2. Generate an API key from your account settings
 3. Add to your `.env` file:
@@ -344,8 +344,7 @@ CUGA supports LiteLLM through the OpenAI configuration by overriding the base UR
    OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"
     # Optional override
    MODEL_NAME=openai/gpt-4o                    # Override model name
-    ```
-
+   ```
 
 ## Configuration Files
 
@@ -367,9 +366,7 @@ Each file contains agent-specific model settings that can be overridden by envir
 
 </div>
 
-
-
-## 📦 Using CUGA as a Python SDK 
+## 📦 Using CUGA as a Python SDK
 
 CUGA can be easily integrated into your Python applications as a library. The SDK provides a clean, minimal API for creating and invoking agents with custom tools.
 
@@ -576,6 +573,7 @@ CUGA supports [E2B](https://e2b.dev) for cloud-based code execution in secure, e
    - Create an API key from your [dashboard](https://e2b.dev/dashboard)
 
 2. **Set up the E2B template**:
+
    ```bash
    # Install E2B CLI
    npm install -g @e2b/cli
@@ -589,6 +587,7 @@ CUGA supports [E2B](https://e2b.dev) for cloud-based code execution in secure, e
    ```
 
 3. **Install E2B dependencies**:
+
    ```bash
    uv sync --group e2b
    ```
@@ -616,6 +615,7 @@ ngrok http 8001
 ```
 
 Then edit `./src/cuga/settings.toml`:
+
 ```toml
 [server_ports]
 function_call_host = "https://abc123.ngrok.io"  # Your ngrok URL
@@ -634,6 +634,7 @@ ngrok http 7860
 ```
 
 Then edit `./src/cuga/settings.toml`:
+
 ```toml
 [server_ports]
 function_call_host = "https://xyz789.ngrok.io"  # Your ngrok URL
@@ -644,6 +645,7 @@ CUGA automatically proxies `/functions/call` requests to the registry when using
 ### Enable E2B in Settings
 
 Edit `./src/cuga/settings.toml`:
+
 ```toml
 [advanced_features]
 e2b_sandbox = true
@@ -673,6 +675,7 @@ E2B will automatically execute code in cloud sandboxes. You'll see logs indicati
 - **Connection timeout**: Check that your firewall allows ngrok connections
 
 **Benefits of E2B**:
+
 - ✅ No Docker/Podman required
 - ✅ Faster than container-based sandboxing
 - ✅ Cloud-native with automatic scaling
@@ -802,7 +805,7 @@ instruction_set = "default"  # or any instruction set above
 
 1. Install memory dependencies `uv sync --extra memory`
 1. Change `enable_memory = true` in `setting.toml`
-2. Run `cuga start memory`
+1. Run `cuga start memory`
 
 Watch CUGA with Memory enabled
 
@@ -814,8 +817,8 @@ Watch CUGA with Memory enabled
 
 1. set `enable_memory` flag to true
 2. Run `cuga start memory`
-3. Run `cuga start demo_crm --sample-memory-data` 
-4. go to the cuga webpage and type `Identify the common cities between my cuga_workspace/cities.txt and cuga_workspace/company.txt` . Here you should see the errors related to CodeAgent. Wait for a minute for `tips` to be generated. `Tips` generation can be confirmed from the  terminal where` cuga start memory` was run
+3. Run `cuga start demo_crm --sample-memory-data`
+4. go to the cuga webpage and type `Identify the common cities between my cuga_workspace/cities.txt and cuga_workspace/company.txt` . Here you should see the errors related to CodeAgent. Wait for a minute for `tips` to be generated. `Tips` generation can be confirmed from the terminal where` cuga start memory` was run
 5. Re-run the same utterance again and it should finish in lesser number of steps
 
 </details>
@@ -876,11 +879,13 @@ CUGA supports three types of tool integrations. Each approach has its own use ca
 All tests are available through `./src/scripts/run_tests.sh`:
 
 **Unit Tests**
+
 - Registry: OpenAPI integration, MCP server functionality, service configurations
 - Variables Manager: Core functionality, metadata handling, singleton pattern
 - Code Executors: Local sandbox and E2B lite execution
 
 **Policy Integration Tests** (`src/cuga/backend/cuga_graph/policy/tests/`)
+
 - Intent Guard: Blocking behavior, priority resolution, multiple guard scenarios
 - Playbook: Guidance injection, plan refinement, workflow execution
 - Tool Approval: Human-in-the-loop approval flows (approve/deny)
@@ -891,10 +896,12 @@ All tests are available through `./src/scripts/run_tests.sh`:
 - Keyword Operators: AND/OR logic, case sensitivity, multi-keyword matching
 
 **SDK Integration Tests** (`src/cuga/sdk_core/tests/`)
+
 - SDK functionality: Agent invocation, streaming, tool integration
 - Policy management: Policy loading, matching, and execution via SDK
 
 **Stability Tests** (`run_stability_tests.py`)
+
 - Fast Mode: Get top account by revenue, list accounts, find VP sales high-value accounts
 - CRM Workflows: Contacts management, email operations, tool discovery
 - HF Utterances: Account queries, revenue calculations, playbook execution
@@ -922,7 +929,6 @@ For information on how to evaluate, see the [CUGA Evaluation Documentation](src/
 
 - 📖 [Example applications](./docs/examples)
 - 📧 Contact: [CUGA Team](https://forms.office.com/pages/responsepage.aspx?id=V3D2_MlQ1EqY8__KZK3Z6UtMUa14uFNMi1EyUFiZFGRUQklOQThLRjlYMFM2R1dYTk5GVTFMRzNZVi4u&route=shorturl)
-
 
 ## Call for the Community
 

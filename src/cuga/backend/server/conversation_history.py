@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from loguru import logger
 from pydantic import BaseModel
@@ -23,7 +23,7 @@ class ConversationMessage(BaseModel):
     role: str
     content: str
     timestamp: str
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
 
 class StreamEvent(BaseModel):
@@ -38,7 +38,7 @@ class ConversationHistory(BaseModel):
     thread_id: str
     version: int
     user_id: str
-    messages: List[ConversationMessage]
+    messages: list[ConversationMessage]
     created_at: str
     updated_at: str
 
@@ -47,7 +47,7 @@ class ConversationStreamHistory(BaseModel):
     agent_id: str
     thread_id: str
     user_id: str
-    events: List[StreamEvent]
+    events: list[StreamEvent]
     created_at: str
     updated_at: str
 
@@ -61,7 +61,7 @@ def _tenant_id() -> str:
 
 
 class ConversationHistoryDB:
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         self._schema_ensured = False
 
     def _get_store(self):
@@ -114,7 +114,12 @@ class ConversationHistoryDB:
             await store.close()
 
     async def save_conversation(
-        self, agent_id: str, thread_id: str, version: int, user_id: str, messages: List[Dict[str, Any]]
+        self,
+        agent_id: str,
+        thread_id: str,
+        version: int,
+        user_id: str,
+        messages: list[dict[str, Any]],
     ) -> bool:
         try:
             await self._ensure_schema()
@@ -138,7 +143,16 @@ class ConversationHistoryDB:
                         SET messages = ?, updated_at = ?
                         WHERE tenant_id = ? AND instance_id = ? AND agent_id = ? AND thread_id = ? AND version = ? AND user_id = ?
                         """,
-                        (messages_json, now, tenant_id, inst_id, agent_id, thread_id, version, user_id),
+                        (
+                            messages_json,
+                            now,
+                            tenant_id,
+                            inst_id,
+                            agent_id,
+                            thread_id,
+                            version,
+                            user_id,
+                        ),
                     )
                 else:
                     await store.execute(
@@ -147,7 +161,17 @@ class ConversationHistoryDB:
                         (tenant_id, instance_id, agent_id, thread_id, version, user_id, messages, created_at, updated_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
-                        (tenant_id, inst_id, agent_id, thread_id, version, user_id, messages_json, now, now),
+                        (
+                            tenant_id,
+                            inst_id,
+                            agent_id,
+                            thread_id,
+                            version,
+                            user_id,
+                            messages_json,
+                            now,
+                            now,
+                        ),
                     )
                 await store.commit()
                 return True
@@ -159,7 +183,7 @@ class ConversationHistoryDB:
 
     async def get_conversation(
         self, agent_id: str, thread_id: str, version: int, user_id: str
-    ) -> Optional[ConversationHistory]:
+    ) -> ConversationHistory | None:
         try:
             await self._ensure_schema()
             store = self._get_store()
@@ -192,8 +216,8 @@ class ConversationHistoryDB:
             return None
 
     async def get_thread_history(
-        self, thread_id: str, user_id: Optional[str] = None
-    ) -> List[ConversationHistory]:
+        self, thread_id: str, user_id: str | None = None
+    ) -> list[ConversationHistory]:
         try:
             await self._ensure_schema()
             store = self._get_store()
@@ -260,7 +284,9 @@ class ConversationHistoryDB:
             logger.error(f"Error getting latest version: {e}")
             return 0
 
-    async def delete_conversation(self, agent_id: str, thread_id: str, version: int, user_id: str) -> bool:
+    async def delete_conversation(
+        self, agent_id: str, thread_id: str, version: int, user_id: str
+    ) -> bool:
         try:
             await self._ensure_schema()
             store = self._get_store()
@@ -324,7 +350,7 @@ class ConversationHistoryDB:
             logger.error(f"Error deleting thread: {e}")
             return False
 
-    async def get_all_threads_for_agent(self, agent_id: str, user_id: str) -> List[Dict[str, Any]]:
+    async def get_all_threads_for_agent(self, agent_id: str, user_id: str) -> list[dict[str, Any]]:
         try:
             await self._ensure_schema()
             store = self._get_store()
@@ -361,7 +387,9 @@ class ConversationHistoryDB:
                             if role in ("user", "human"):
                                 content = msg.get("content", "")
                                 if content and content.strip():
-                                    first_message = content[:60] + "..." if len(content) > 60 else content
+                                    first_message = (
+                                        content[:60] + "..." if len(content) > 60 else content
+                                    )
                                     break
                     if first_message == "New Conversation":
                         stream_row = await store.fetchone(
@@ -378,7 +406,9 @@ class ConversationHistoryDB:
                                     event_data = event.get("event_data", "")
                                     if event_data and event_data.strip():
                                         first_message = (
-                                            event_data[:60] + "..." if len(event_data) > 60 else event_data
+                                            event_data[:60] + "..."
+                                            if len(event_data) > 60
+                                            else event_data
                                         )
                                         break
                     threads.append(
@@ -397,7 +427,7 @@ class ConversationHistoryDB:
             return []
 
     async def save_stream_events(
-        self, agent_id: str, thread_id: str, user_id: str, events: List[Dict[str, Any]]
+        self, agent_id: str, thread_id: str, user_id: str, events: list[dict[str, Any]]
     ) -> bool:
         try:
             await self._ensure_schema()
@@ -423,7 +453,15 @@ class ConversationHistoryDB:
                         UPDATE stream_events SET events = ?, updated_at = ?
                         WHERE tenant_id = ? AND instance_id = ? AND agent_id = ? AND thread_id = ? AND user_id = ?
                         """,
-                        (json.dumps(combined_events), now, tenant_id, inst_id, agent_id, thread_id, user_id),
+                        (
+                            json.dumps(combined_events),
+                            now,
+                            tenant_id,
+                            inst_id,
+                            agent_id,
+                            thread_id,
+                            user_id,
+                        ),
                     )
                 else:
                     await store.execute(
@@ -443,7 +481,7 @@ class ConversationHistoryDB:
 
     async def get_stream_events(
         self, agent_id: str, thread_id: str, user_id: str
-    ) -> Optional[ConversationStreamHistory]:
+    ) -> ConversationStreamHistory | None:
         try:
             await self._ensure_schema()
             store = self._get_store()
@@ -474,7 +512,13 @@ class ConversationHistoryDB:
             return None
 
     async def append_stream_event(
-        self, agent_id: str, thread_id: str, user_id: str, event_name: str, event_data: str, sequence: int
+        self,
+        agent_id: str,
+        thread_id: str,
+        user_id: str,
+        event_name: str,
+        event_data: str,
+        sequence: int,
     ) -> bool:
         try:
             stream_history = await self.get_stream_events(agent_id, thread_id, user_id)
@@ -484,7 +528,7 @@ class ConversationHistoryDB:
                 "timestamp": datetime.now(UTC).isoformat(),
                 "sequence": sequence,
             }
-            events_list: List[Dict[str, Any]]
+            events_list: list[dict[str, Any]]
             if stream_history:
                 events_list = [
                     event.model_dump() if hasattr(event, "model_dump") else dict(event)
@@ -499,7 +543,7 @@ class ConversationHistoryDB:
             return False
 
 
-_conversation_db: Optional[ConversationHistoryDB] = None
+_conversation_db: ConversationHistoryDB | None = None
 
 
 def get_conversation_db() -> ConversationHistoryDB:

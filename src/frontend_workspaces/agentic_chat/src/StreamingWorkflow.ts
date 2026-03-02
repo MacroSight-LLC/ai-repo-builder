@@ -1,5 +1,11 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
-import { ChatInstance, CustomSendMessageOptions, GenericItem, MessageRequest, StreamChunk } from "@carbon/ai-chat";
+import {
+  ChatInstance,
+  CustomSendMessageOptions,
+  GenericItem,
+  MessageRequest,
+  StreamChunk,
+} from "@carbon/ai-chat";
 import { streamStateManager } from "./StreamManager";
 import { RESPONSE_USER_PROFILE, API_BASE_URL } from "./constants";
 import { randomUUID } from "./uuid";
@@ -8,7 +14,9 @@ import { randomUUID } from "./uuid";
 // Declare it for TypeScript and compute a safe value that won't throw if undefined.
 declare const FAKE_STREAM: boolean | undefined;
 const USE_FAKE_STREAM: boolean =
-  typeof FAKE_STREAM !== "undefined" ? !!FAKE_STREAM : !!(globalThis as any).FAKE_STREAM;
+  typeof FAKE_STREAM !== "undefined"
+    ? !!FAKE_STREAM
+    : !!(globalThis as any).FAKE_STREAM;
 const FAKE_STREAM_FILE = "/fake_data.json"; // Path to your JSON file
 const FAKE_STREAM_DELAY = 1000; // Delay between fake stream events in milliseconds
 // Unique timestamp generator for IDs
@@ -16,12 +24,12 @@ const generateTimestampId = () => {
   return Date.now().toString();
 };
 
-function renderPlan(planJson) {
+function renderPlan(planJson: any) {
   console.log("Current plan json", planJson);
   return planJson;
 }
 
-function getCurrentStep(event) {
+function getCurrentStep(event: any) {
   console.log("getCurrentStep received: ", event);
   switch (event.event) {
     case "__interrupt__":
@@ -38,7 +46,10 @@ function getCurrentStep(event) {
 }
 
 const simulateFakeStream = async (instance: ChatInstance, query: string) => {
-  console.log("Starting fake stream simulation with query:", query.substring(0, 50));
+  console.log(
+    "Starting fake stream simulation with query:",
+    query.substring(0, 50),
+  );
 
   // Create abort controller for this stream
   const abortController = new AbortController();
@@ -64,20 +75,26 @@ const simulateFakeStream = async (instance: ChatInstance, query: string) => {
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to load fake stream data: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Failed to load fake stream data: ${response.status} ${response.statusText}`,
+      );
     }
 
     const fakeStreamData = await response.json();
 
     if (!fakeStreamData.steps || !Array.isArray(fakeStreamData.steps)) {
-      throw new Error("Invalid fake stream data format. Expected { steps: [{ name: string, data: any }] }");
+      throw new Error(
+        "Invalid fake stream data format. Expected { steps: [{ name: string, data: any }] }",
+      );
     }
 
     workflowInitialized = true;
 
     // Card manager message is already created in customSendMessage, so we don't need to create another one here
     if (window.aiSystemInterface) {
-      console.log("Card manager interface available for fake stream, skipping duplicate message creation");
+      console.log(
+        "Card manager interface available for fake stream, skipping duplicate message creation",
+      );
     }
 
     // Use abortable delay for initial wait
@@ -92,7 +109,9 @@ const simulateFakeStream = async (instance: ChatInstance, query: string) => {
       }
 
       const step = fakeStreamData.steps[i];
-      console.log(`Processing step ${i + 1}/${fakeStreamData.steps.length}: ${step.name}`);
+      console.log(
+        `Processing step ${i + 1}/${fakeStreamData.steps.length}: ${step.name}`,
+      );
 
       // Use abortable delay instead of regular setTimeout
       await abortableDelay(FAKE_STREAM_DELAY, abortController.signal);
@@ -121,7 +140,7 @@ const simulateFakeStream = async (instance: ChatInstance, query: string) => {
       } else {
         await instance.messaging.addMessage({
           message_options: {
-            response_user_profile: RESPONSE_USER_PROFILE
+            response_user_profile: RESPONSE_USER_PROFILE,
           },
           output: {
             generic: [
@@ -141,7 +160,10 @@ const simulateFakeStream = async (instance: ChatInstance, query: string) => {
 
       // Final check after adding message
       if (abortController.signal.aborted) {
-        console.log("Fake stream process aborted after adding message at step", i);
+        console.log(
+          "Fake stream process aborted after adding message at step",
+          i,
+        );
         break;
       }
     }
@@ -152,14 +174,15 @@ const simulateFakeStream = async (instance: ChatInstance, query: string) => {
     }
 
     return fullResponse;
-  } catch (error) {
-    if (error.name === "AbortError" || abortController.signal.aborted) {
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    if (err.name === "AbortError" || abortController.signal.aborted) {
       console.log("Fake stream was cancelled by user");
 
       // Add a message indicating the stream was stopped
       await instance.messaging.addMessage({
         message_options: {
-          response_user_profile: RESPONSE_USER_PROFILE
+          response_user_profile: RESPONSE_USER_PROFILE,
         },
         output: {
           generic: [
@@ -174,12 +197,12 @@ const simulateFakeStream = async (instance: ChatInstance, query: string) => {
 
       return fullResponse; // Return partial response
     } else {
-      console.error("Fake streaming error:", error);
+      console.error("Fake streaming error:", err);
 
       // Add error message
       await instance.messaging.addMessage({
         message_options: {
-          response_user_profile: RESPONSE_USER_PROFILE
+          response_user_profile: RESPONSE_USER_PROFILE,
         },
         output: {
           generic: [
@@ -192,7 +215,7 @@ const simulateFakeStream = async (instance: ChatInstance, query: string) => {
         },
       });
 
-      throw error;
+      throw err;
     }
   } finally {
     // Always reset streaming state when done
@@ -232,15 +255,18 @@ const addStreamMessage = async (
   workflowId: string,
   stepTitle: string,
   data: any,
-  responseType: "user_defined" | "text" = "user_defined"
+  responseType: "user_defined" | "text" = "user_defined",
 ) => {
   // For the new card system, we don't add individual messages
   // Instead, we let the CardManager handle the steps through the global interface
   if (window.aiSystemInterface && responseType === "user_defined") {
     console.log("Adding step to card manager:", stepTitle, data);
     console.log("aiSystemInterface available:", !!window.aiSystemInterface);
-    console.log("addStep function available:", !!window.aiSystemInterface.addStep);
-    
+    console.log(
+      "addStep function available:",
+      !!window.aiSystemInterface.addStep,
+    );
+
     try {
       window.aiSystemInterface.addStep(stepTitle, data);
       console.log("Step added successfully");
@@ -249,7 +275,12 @@ const addStreamMessage = async (
     }
     return;
   } else {
-    console.log("Not using card manager - aiSystemInterface:", !!window.aiSystemInterface, "responseType:", responseType);
+    console.log(
+      "Not using card manager - aiSystemInterface:",
+      !!window.aiSystemInterface,
+      "responseType:",
+      responseType,
+    );
   }
 
   // For text messages, still add them normally
@@ -262,7 +293,7 @@ const addStreamMessage = async (
 
     await instance.messaging.addMessage({
       message_options: {
-        response_user_profile: RESPONSE_USER_PROFILE
+        response_user_profile: RESPONSE_USER_PROFILE,
       },
       output: {
         generic: [messageConfig],
@@ -274,9 +305,9 @@ const addStreamMessage = async (
 const fetchStreamingData = async (
   instance: ChatInstance,
   query: string,
-  action: object = null,
+  action: object | null = null,
   threadId?: string,
-  useDraftAgent?: boolean
+  useDraftAgent?: boolean,
 ) => {
   // Check if we should use fake streaming
   if (USE_FAKE_STREAM) {
@@ -284,7 +315,10 @@ const fetchStreamingData = async (
     return simulateFakeStream(instance, query);
   }
 
-  console.log("🚀 Starting new fetchStreamingData with query:", query.substring(0, 50));
+  console.log(
+    "🚀 Starting new fetchStreamingData with query:",
+    query.substring(0, 50),
+  );
 
   // Create abort controller for this stream
   const abortController = new AbortController();
@@ -319,7 +353,9 @@ const fetchStreamingData = async (
     }
 
     // First create the workflow component
-    console.log("💬 Initializing workflow without adding placeholder chat message");
+    console.log(
+      "💬 Initializing workflow without adding placeholder chat message",
+    );
     workflowInitialized = true;
 
     // Give a moment for the new CardManager message to mount
@@ -368,7 +404,13 @@ const fetchStreamingData = async (
           let stepTitle = ev.event;
           console.log("⚡ Processing step:", stepTitle);
 
-          await addStreamMessage(instance, workflowId, stepTitle, currentStep, "user_defined");
+          await addStreamMessage(
+            instance,
+            workflowId,
+            stepTitle,
+            currentStep,
+            "user_defined",
+          );
         }
 
         // Check if aborted after processing message
@@ -390,7 +432,9 @@ const fetchStreamingData = async (
 
         // Don't add error message if stream was aborted by user
         if (abortController.signal.aborted) {
-          console.log("🛑 Stream error was due to user abort - not adding error message");
+          console.log(
+            "🛑 Stream error was due to user abort - not adding error message",
+          );
           return;
         }
 
@@ -401,7 +445,7 @@ const fetchStreamingData = async (
             workflowId,
             "error",
             `An error occurred during processing: ${err.message}`,
-            "text"
+            "text",
           );
         }
       },
@@ -415,35 +459,55 @@ const fetchStreamingData = async (
     }
 
     return fullResponse;
-  } catch (error) {
-    console.log("❌ Caught error in fetchStreamingData:", error);
-    console.log("❌ Error name:", error.name);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.log("❌ Caught error in fetchStreamingData:", err);
+    console.log("❌ Error name:", err.name);
     console.log("❌ Signal aborted:", abortController.signal.aborted);
 
     // Handle abort vs real errors
-    if (error.name === "AbortError" || error.message === "Aborted" || abortController.signal.aborted) {
+    if (
+      err.name === "AbortError" ||
+      err.message === "Aborted" ||
+      abortController.signal.aborted
+    ) {
       console.log("🛑 Fetch stream was cancelled by user");
 
       // Add a message indicating the stream was stopped
       if (workflowInitialized) {
-        await addStreamMessage(instance, workflowId, "stopped", `<div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 8px; padding: 12px 16px; color: white; text-align: center; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3); margin: 8px 0; display: flex; align-items: center; justify-content: center; gap: 8px;"><div style="font-size: 1.2rem;">⏹</div><div><div style="font-size: 0.9rem; font-weight: 600; margin: 0;">Processing Stopped</div><div style="font-size: 0.75rem; opacity: 0.9; margin: 0;">Stopped by user</div></div></div>`, "text");
+        await addStreamMessage(
+          instance,
+          workflowId,
+          "stopped",
+          `<div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 8px; padding: 12px 16px; color: white; text-align: center; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3); margin: 8px 0; display: flex; align-items: center; justify-content: center; gap: 8px;"><div style="font-size: 1.2rem;">⏹</div><div><div style="font-size: 0.9rem; font-weight: 600; margin: 0;">Processing Stopped</div><div style="font-size: 0.75rem; opacity: 0.9; margin: 0;">Stopped by user</div></div></div>`,
+          "text",
+        );
       }
 
       return fullResponse; // Return partial response
     } else {
-      console.error("💥 Real error in fetchStreamingData:", error);
+      console.error("💥 Real error in fetchStreamingData:", err);
 
       // Add error step if workflow is initialized
       if (workflowInitialized) {
-        await addStreamMessage(instance, workflowId, "error", `❌ An error occurred: ${error.message}`, "text");
+        await addStreamMessage(
+          instance,
+          workflowId,
+          "error",
+          `❌ An error occurred: ${err.message}`,
+          "text",
+        );
 
         // Signal completion to the system on error
-        if (window.aiSystemInterface && window.aiSystemInterface.setProcessingComplete) {
+        if (
+          window.aiSystemInterface &&
+          window.aiSystemInterface.setProcessingComplete
+        ) {
           window.aiSystemInterface.setProcessingComplete(true);
         }
       }
 
-      throw error;
+      throw err;
     }
   } finally {
     // Always reset streaming state when done
@@ -456,7 +520,10 @@ const fetchStreamingData = async (
 
 // Enhanced abortable delay function (same as before but with logging)
 function abortableDelayV2(ms: number, signal: AbortSignal): Promise<void> {
-  console.log(`⏰ Creating abortable delay for ${ms}ms, signal.aborted:`, signal.aborted);
+  console.log(
+    `⏰ Creating abortable delay for ${ms}ms, signal.aborted:`,
+    signal.aborted,
+  );
 
   return new Promise((resolve, reject) => {
     // If already aborted, reject immediately
@@ -483,10 +550,16 @@ function abortableDelayV2(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-const waitForInterfaceReady = async (timeoutMs = 3000, intervalMs = 100): Promise<void> => {
+const waitForInterfaceReady = async (
+  timeoutMs = 3000,
+  intervalMs = 100,
+): Promise<void> => {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    if (window.aiSystemInterface && typeof window.aiSystemInterface.addStep === "function") {
+    if (
+      window.aiSystemInterface &&
+      typeof window.aiSystemInterface.addStep === "function"
+    ) {
       return;
     }
     await new Promise((r) => setTimeout(r, intervalMs));
@@ -496,7 +569,7 @@ const waitForInterfaceReady = async (timeoutMs = 3000, intervalMs = 100): Promis
 
 export const streamViaBackground = async (
   instance: ChatInstance,
-  query: string
+  query: string,
 ) => {
   // Guard against empty query
   if (!query?.trim()) {
@@ -572,7 +645,7 @@ export const streamViaBackground = async (
   if (window.aiSystemInterface) {
     window.aiSystemInterface.addStep(
       "Connection Established",
-      "Processing request and preparing response..."
+      "Processing request and preparing response...",
     );
   }
 
@@ -604,9 +677,7 @@ export const streamViaBackground = async (
               // Graceful stop handling
               window.aiSystemInterface.stopProcessing();
               isStopped = true;
-            } else if (
-              !window.aiSystemInterface.hasStepWithTitle(stepTitle)
-            ) {
+            } else if (!window.aiSystemInterface.hasStepWithTitle(stepTitle)) {
               window.aiSystemInterface.addStep(stepTitle, currentStep);
             }
           }
@@ -630,7 +701,7 @@ export const streamViaBackground = async (
         // Report error in workflow UI
         window.aiSystemInterface?.addStep(
           "Error Occurred",
-          `An error occurred during processing: ${message.message}`
+          `An error occurred during processing: ${message.message}`,
         );
         if (window.aiSystemInterface && !isStopped) {
           window.aiSystemInterface.setProcessingComplete?.(true);
@@ -665,7 +736,7 @@ export const streamViaBackground = async (
         console.error("Background returned error during dispatch", bgResp);
         window.aiSystemInterface?.addStep(
           "Error Occurred",
-          bgResp.message || "Background error"
+          bgResp.message || "Background error",
         );
         window.aiSystemInterface?.setProcessingComplete?.(true);
       }
@@ -675,11 +746,16 @@ export const streamViaBackground = async (
       if (window.aiSystemInterface) {
         window.aiSystemInterface.addStep(
           "Error Occurred",
-          `An error occurred: ${err.message || "Failed to dispatch query"}`
+          `An error occurred: ${err.message || "Failed to dispatch query"}`,
         );
         window.aiSystemInterface.setProcessingComplete?.(true);
       }
     });
 };
 
-export { fetchStreamingData, USE_FAKE_STREAM, FAKE_STREAM_FILE, FAKE_STREAM_DELAY };
+export {
+  fetchStreamingData,
+  USE_FAKE_STREAM,
+  FAKE_STREAM_FILE,
+  FAKE_STREAM_DELAY,
+};
