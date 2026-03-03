@@ -9,7 +9,9 @@
 /** Decode HTML entities so encoded payloads get caught by subsequent regexes. */
 function decodeEntities(html: string): string {
   return html
-    .replace(/&#x([0-9a-f]+);?/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex) =>
+      String.fromCharCode(parseInt(hex, 16)),
+    )
     .replace(/&#(\d+);?/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)));
 }
 

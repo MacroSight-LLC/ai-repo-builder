@@ -116,7 +116,7 @@ google-genai = ["langchain-google-genai>=2.0.11"]
 sandbox = ["llm-sandbox>=0.1.3"]
 
 [tool.pytest.ini_options]
-anyio_mode = "auto"
+asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-v --tb=short -q"

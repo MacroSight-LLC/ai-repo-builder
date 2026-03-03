@@ -104,6 +104,7 @@ class SQLiteManager:
                 )
                 self.connection.execute("COMMIT")
             except sqlite3.IntegrityError as e:
+                self.connection.execute("ROLLBACK")
                 raise NamespaceAlreadyExistsException(
                     f'Namespace "{namespace_id}" already exists.'
                 ) from e
@@ -139,6 +140,7 @@ class SQLiteManager:
                 )
                 self.connection.execute("COMMIT")
             except sqlite3.IntegrityError as e:
+                self.connection.execute("ROLLBACK")
                 raise RunAlreadyExistsException(f'Run "{run_id}" already exists.') from e
             except Exception as e:
                 self.connection.execute("ROLLBACK")
@@ -297,7 +299,7 @@ class SQLiteManager:
             self.connection.close()
             self.connection = None
 
-    def __enter__(self) -> "SQLiteManager":
+    def __enter__(self) -> SQLiteManager:
         # Ensure parent directory exists
         try:
             os.makedirs(os.path.dirname(self.db_path), exist_ok=True)

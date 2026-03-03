@@ -119,11 +119,76 @@ class TestValidateCommand:
         assert "shell operator" in result
 
     def test_command_with_redirect(self) -> None:
-        """Output redirect is allowed when not to /dev/."""
-        assert _validate_command("ls > files.txt") is None
+        """Output redirect is blocked since subprocess_exec has no shell."""
+        result = _validate_command("ls > files.txt")
+        assert result is not None
+        assert "shell operator" in result
+
+    def test_redirect_append_blocked(self) -> None:
+        """Append redirect is also blocked."""
+        result = _validate_command("echo hello >> log.txt")
+        assert result is not None
+        assert "shell operator" in result
 
     def test_blocked_redirect_to_dev(self) -> None:
         assert _validate_command("cat file > /dev/null") is not None
+
+    # ── Security-critical injection vectors ───────────────
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "echo `whoami`",
+            "echo $(cat /etc/passwd)",
+            "echo ${SECRET_KEY}",
+        ],
+    )
+    def test_shell_expansion_blocked(self, cmd: str) -> None:
+        """Backtick, $(), and ${} expansion must be rejected."""
+        result = _validate_command(cmd)
+        assert result is not None
+        assert "expansion" in result or "shell" in result.lower()
+
+    def test_unbalanced_quotes_rejected(self) -> None:
+        """Unbalanced quotes should be rejected."""
+        result = _validate_command("echo 'hello")
+        assert result is not None
+        assert "unbalanced" in result.lower()
+
+    def test_newline_injection_blocked(self) -> None:
+        """Newline characters must be rejected."""
+        result = _validate_command("echo hello\nrm -rf /")
+        assert result is not None
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "find . -exec rm {} ;",
+            "find . -execdir sh -c 'echo pwned' ;",
+            "find . -delete",
+            "find /tmp -ok rm {} ;",
+        ],
+    )
+    def test_find_dangerous_flags_blocked(self, cmd: str) -> None:
+        """find with -exec, -execdir, -delete, -ok must be rejected."""
+        result = _validate_command(cmd)
+        assert result is not None
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "docker run --rm -v /:/host alpine cat /host/etc/shadow",
+            "docker exec -it container bash",
+        ],
+    )
+    def test_unsafe_docker_subcommands_blocked(self, cmd: str) -> None:
+        """docker run/exec must be rejected."""
+        result = _validate_command(cmd)
+        assert result is not None
+
+    def test_quoted_semicolons_allowed(self) -> None:
+        """Semicolons inside quotes are safe (shlex handles them as literals)."""
+        assert _validate_command("python3 -c 'import sys; print(42)'") is None
 
 
 class TestAllowedCommandsSet:

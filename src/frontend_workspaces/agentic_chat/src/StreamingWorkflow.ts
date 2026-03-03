@@ -743,6 +743,8 @@ export const streamViaBackground = async (
     })
     .catch((err: any) => {
       console.error("Failed to dispatch agent_query", err);
+      // Clean up message listener to prevent leak
+      (window as any).chrome.runtime.onMessage.removeListener(listener);
       if (window.aiSystemInterface) {
         window.aiSystemInterface.addStep(
           "Error Occurred",

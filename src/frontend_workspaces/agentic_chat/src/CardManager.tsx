@@ -167,11 +167,12 @@ const CardManager: React.FC<CardManagerProps> = ({
 
           // Handle in-place card switching vs append mode
           if (viewMode === "inplace") {
-            if (currentSteps.length > 0) {
-              setCurrentStepIndex((prev) => prev + 1);
-            } else {
-              setCurrentStepIndex(0);
-            }
+            // Use functional updater to avoid stale closure on currentSteps
+            setCurrentStepIndex((prevIndex) => {
+              // If prev.length was 0 before this setCurrentSteps call, the new
+              // step is the first one and we should reset to 0; otherwise advance.
+              return prevIndex >= 0 ? prevIndex + 1 : 0;
+            });
           }
 
           // Auto-expand "Waiting for your input" components and collapse reasoning
@@ -1475,7 +1476,6 @@ const CardManager: React.FC<CardManagerProps> = ({
                       dangerouslySetInnerHTML={{
                         __html: sanitizeHtml(renderedContent),
                       }}
-
                     />
 
                     {/* 2. Playbook guide content (collapsible if available) */}

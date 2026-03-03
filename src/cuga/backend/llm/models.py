@@ -97,7 +97,14 @@ class LLMManager:
         Returns:
             New model instance with updated parameters
         """
-        model = copy.deepcopy(model)
+        # Create a shallow copy via Pydantic to avoid deep-copying httpx
+        # clients (which contain SSL contexts and connection pools that
+        # cannot be safely pickled / deep-copied).
+        try:
+            model = model.model_copy(deep=False)
+        except Exception:
+            # Fallback: deep copy works for models without httpx clients
+            model = copy.deepcopy(model)
         model_kwargs = {}
         if hasattr(model, "model_kwargs") and model.model_kwargs is not None:
             model_kwargs = model.model_kwargs.copy()

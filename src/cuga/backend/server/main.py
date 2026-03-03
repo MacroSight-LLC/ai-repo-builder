@@ -1197,8 +1197,10 @@ async def event_stream(
                             local_state = AgentState(**latest_state_values)
                     # Safely parse event name — guard against malformed SSE data
                     first_line = event.split("\n")[0]
-                    parts = first_line.split(":", 1)
-                    name = parts[1].strip() if len(parts) > 1 else "unknown"
+                    if first_line.startswith("event:"):
+                        name = first_line.split(":", 1)[1].strip()
+                    else:
+                        name = "unknown"
                     logger.debug(f"Yield {event}")
                     if name not in ["ChatAgent"]:
                         # Add stream event to buffer instead of immediate DB write
@@ -1612,7 +1614,9 @@ async def stream(
         if draft_state and getattr(draft_state, "agent", None):
             run_agent = draft_state.agent
         else:
-            logger.warning("Draft agent requested but not available — falling back to published agent")
+            logger.warning(
+                "Draft agent requested but not available — falling back to published agent"
+            )
 
     return StreamingResponse(
         event_stream(

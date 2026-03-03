@@ -14,13 +14,15 @@ fi
 # Linting
 echo "→ Running linting..."
 if ! python -m ruff check src/; then
-  echo "⚠️  Linting issues found"
+  echo "❌ Linting issues found"
+  PASS=false
 fi
 
 # Type check
 echo "→ Running type check..."
 if ! python -m mypy src/ --ignore-missing-imports -q; then
-  echo "⚠️  Type check issues found"
+  echo "❌ Type check issues found"
+  PASS=false
 fi
 
 # Docker build check

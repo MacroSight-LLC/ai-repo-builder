@@ -1,16 +1,17 @@
 export const isObjectEmpty = (
-  obj: Record<string, unknown> | Map<string, unknown>
-) => {
-  if (!obj) return;
+  obj: Record<string, unknown> | Map<string, unknown>,
+): boolean => {
+  if (!obj) return true;
+  if (obj instanceof Map) return obj.size === 0;
   return Object.keys(obj).length === 0;
 };
 
 export const getEnumKeyByValue = <T extends object>(
   value: string,
-  enumObj: T
+  enumObj: T,
 ): T[keyof T] => {
   const key = Object.keys(enumObj).find(
-    (key) => enumObj[key as keyof T] === value
+    (key) => enumObj[key as keyof T] === value,
   );
   return enumObj[key as keyof T];
 };

@@ -77,6 +77,8 @@ kubectl create secret generic "$SECRET_NAME" "${SECRET_ARGS[@]}"
 AGENT_SETTING="${AGENT_CONFIG:-${AGENT_SETTING_CONFIG:-$DEFAULT_AGENT_CONFIG}}"
 echo "==> Deploying (AGENT_SETTING_CONFIG=$AGENT_SETTING)..."
 helm install "$RELEASE_NAME" "$SCRIPT_DIR/helm/cuga" \
+  --set image.repository=cuga-agent \
+  --set image.tag=latest \
   --set image.pullPolicy=Never \
   --set existingSecret="$SECRET_NAME" \
   --set env.MODEL_NAME="${MODEL_NAME:-openai/gpt-oss-120b}" \

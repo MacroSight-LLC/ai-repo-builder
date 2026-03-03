@@ -556,7 +556,16 @@ export function CustomChat({
     fileElement.setAttribute("data-file-path", filePath);
     fileElement.setAttribute("data-file-name", selectedFile.name);
     fileElement.setAttribute("contentEditable", "false");
-    fileElement.innerHTML = `<svg class="file-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14,2 14,8 20,8"></polyline></svg><span class="file-name">${selectedFile.name}</span><button class="file-chip-remove" type="button" aria-label="Remove file">×</button>`;
+
+    // Build file chip content safely — escape filename to prevent XSS
+    const escapeName = (s: string) =>
+      s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    const safeName = escapeName(selectedFile.name);
+    fileElement.innerHTML = `<svg class="file-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14,2 14,8 20,8"></polyline></svg><span class="file-name">${safeName}</span><button class="file-chip-remove" type="button" aria-label="Remove file">×</button>`;
 
     // Find and replace the @ trigger and search term
     const text = inputRef.current.textContent || "";

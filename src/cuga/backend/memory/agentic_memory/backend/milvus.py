@@ -72,7 +72,7 @@ class MilvusMemoryBackend(BaseMemoryBackend):
 
     def validate_namespace(self, namespace_id: str):
         if not self.milvus.has_collection(namespace_id):
-            raise NamespaceNotFoundException(f"Namespace {namespace_id}' not found")
+            raise NamespaceNotFoundException(f"Namespace '{namespace_id}' not found")
 
     def create_namespace(
         self,
@@ -228,16 +228,19 @@ class MilvusMemoryBackend(BaseMemoryBackend):
             )
         else:
             filter_expr = _build_filter_expr(filters)
-            query_kwargs = {
+            search_kwargs: dict = {
                 "collection_name": namespace_id,
                 "anns_field": "embedding",
                 "data": [self.embedding_model.encode(query)],
                 "limit": limit,
                 "search_params": {"metric_type": "IP"},
+                "output_fields": ["*"],
             }
             if filter_expr:
-                query_kwargs["filter"] = filter_expr
-            results = self.milvus.query(**query_kwargs)
+                search_kwargs["filter"] = filter_expr
+            results = self.milvus.search(**search_kwargs)
+            # search() returns list[list[dict]], one list per query vector
+            results = results[0] if results else []
         return [parse_milvus_fact(i) for i in results]
 
     def delete_fact_by_id(self, namespace_id: str, fact_id: str):
@@ -266,7 +269,9 @@ class MilvusMemoryBackend(BaseMemoryBackend):
 
     def delete_run(self, namespace_id: str, run_id: str):
         self.validate_namespace(namespace_id)
-        self.milvus.delete(collection_name=namespace_id, filter=f"run_id == '{_safe_filter_value(run_id)}'")
+        self.milvus.delete(
+            collection_name=namespace_id, filter=f"run_id == '{_safe_filter_value(run_id)}'"
+        )
         with SQLiteManager() as db_manager:
             db_manager.delete_run(namespace_id=namespace_id, run_id=run_id)
 
@@ -336,19 +341,16 @@ class MilvusMemoryBackend(BaseMemoryBackend):
         self.validate_namespace(namespace_id)
         filters = filters or {}
 
-        results = [
-            parse_milvus_fact(i)
-            for i in self.milvus.query(
-                collection_name=namespace_id,
-                anns_field="embedding",
-                data=[self.embedding_model.encode(query)],
-                filter=_build_filter_expr(
-                    filters, ['run_id != ""']
-                ),
-                limit=5,
-                search_params={"metric_type": "IP"},
-            )
-        ]
+        search_results = self.milvus.search(
+            collection_name=namespace_id,
+            anns_field="embedding",
+            data=[self.embedding_model.encode(query)],
+            filter=_build_filter_expr(filters, ['run_id != ""']),
+            limit=5,
+            search_params={"metric_type": "IP"},
+            output_fields=["*"],
+        )
+        results = [parse_milvus_fact(i) for i in (search_results[0] if search_results else [])]
 
         if len(results) > 0:
             run_id = results[0].run_id

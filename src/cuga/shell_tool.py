@@ -146,7 +146,7 @@ def _validate_command(command: str) -> str | None:
         # Since shlex.split correctly handles quoting, any metachar that appears
         # inside a quoted arg is a single token with no special meaning.
         # We only need to check whether any token IS a shell operator.
-        shell_operators = {";", "|", "||", "&&", "`"}
+        shell_operators = {";", "|", "||", "&&", "`", ">", ">>", "<", "<<"}
         for token in tokens:
             if token in shell_operators:
                 return (
@@ -155,18 +155,14 @@ def _validate_command(command: str) -> str | None:
                 )
             if token.startswith("`") or "$(" in token or "${" in token:
                 return (
-                    "Blocked: command contains shell expansion. "
-                    "Only single commands are allowed."
+                    "Blocked: command contains shell expansion. Only single commands are allowed."
                 )
     except ValueError:
         # shlex.split fails on unbalanced quotes — reject the command
         return "Blocked: command has unbalanced quotes"
 
     if "\n" in command:
-        return (
-            "Blocked: command contains newline. "
-            "Only single commands are allowed."
-        )
+        return "Blocked: command contains newline. Only single commands are allowed."
 
     # Check first-word blocks (e.g. bare "eval" / "exec" as the command)
     first_word = command.strip().split()[0] if command.strip() else ""
